@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *, .theme-solarized-dark, .theme-solarized-dark *, .theme-emerald, .theme-emerald *, .theme-nord, .theme-nord *));
+
+@theme {
+  --color-slate-850: #1e293b;
+  --color-slate-950: #020617;
+}
+
+body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* --- SOLARIZED DARK THEME --- */
+html.theme-solarized-dark,
+html.theme-solarized-dark body {
+  background-color: #002b36 !important;
+  color: #93a1a1 !important;
+}
+html.theme-solarized-dark .bg-white,
+html.theme-solarized-dark .bg-slate-900,
+html.theme-solarized-dark .bg-slate-850 {
+  background-color: #073642 !important;
+}
+html.theme-solarized-dark .bg-slate-50,
+html.theme-solarized-dark .bg-slate-100,
+html.theme-solarized-dark .bg-slate-800 {
+  background-color: #002b36 !important;
+}
+html.theme-solarized-dark .border-slate-100,
+html.theme-solarized-dark .border-slate-200,
+html.theme-solarized-dark .border-slate-800,
+html.theme-solarized-dark .border-slate-750 {
+  border-color: #094554 !important;
+}
+html.theme-solarized-dark .text-slate-900,
+html.theme-solarized-dark .text-slate-950,
+html.theme-solarized-dark .text-slate-800,
+html.theme-solarized-dark .text-slate-700 {
+  color: #839496 !important;
+}
+html.theme-solarized-dark .text-slate-500,
+html.theme-solarized-dark .text-slate-400 {
+  color: #657b83 !important;
+}
+
+/* --- SOLARIZED LIGHT THEME --- */
+html.theme-solarized-light,
+html.theme-solarized-light body {
+  background-color: #fdf6e3 !important;
+  color: #657b83 !important;
+}
+html.theme-solarized-light .bg-white,
+html.theme-solarized-light .bg-slate-900,
+html.theme-solarized-light .bg-slate-850 {
+  background-color: #eee8d5 !important;
+}
+html.theme-solarized-light .bg-slate-50,
+html.theme-solarized-light .bg-slate-100,
+html.theme-solarized-light .bg-slate-800 {
+  background-color: #fdf6e3 !important;
+}
+html.theme-solarized-light .border-slate-100,
+html.theme-solarized-light .border-slate-200,
+html.theme-solarized-light .border-slate-800,
+html.theme-solarized-light .border-slate-750 {
+  border-color: #e0d7c0 !important;
+}
+html.theme-solarized-light .text-slate-900,
+html.theme-solarized-light .text-slate-950,
+html.theme-solarized-light .text-slate-800,
+html.theme-solarized-light .text-slate-700 {
+  color: #073642 !important;
+}
+html.theme-solarized-light .text-slate-500,
+html.theme-solarized-light .text-slate-400 {
+  color: #839496 !important;
+}
+
+/* --- EMERALD THEME --- */
+html.theme-emerald,
+html.theme-emerald body {
+  background-color: #022c22 !important;
+  color: #ecfdf5 !important;
+}
+html.theme-emerald .bg-white,
+html.theme-emerald .bg-slate-900,
+html.theme-emerald .bg-slate-850 {
+  background-color: #064e3b !important;
+}
+html.theme-emerald .bg-slate-50,
+html.theme-emerald .bg-slate-100,
+html.theme-emerald .bg-slate-800 {
+  background-color: #022c22 !important;
+}
+html.theme-emerald .border-slate-100,
+html.theme-emerald .border-slate-200,
+html.theme-emerald .border-slate-800,
+html.theme-emerald .border-slate-750 {
+  border-color: #047857 !important;
+}
+html.theme-emerald .text-slate-900,
+html.theme-emerald .text-slate-950,
+html.theme-emerald .text-slate-800,
+html.theme-emerald .text-slate-700 {
+  color: #ecfdf5 !important;
+}
+html.theme-emerald .text-slate-500,
+html.theme-emerald .text-slate-400 {
+  color: #6ee7b7 !important;
+}
+
+/* --- NORD THEME --- */
+html.theme-nord,
+html.theme-nord body {
+  background-color: #2e3440 !important;
+  color: #eceff4 !important;
+}
+html.theme-nord .bg-white,
+html.theme-nord .bg-slate-900,
+html.theme-nord .bg-slate-850 {
+  background-color: #3b4252 !important;
+}
+html.theme-nord .bg-slate-50,
+html.theme-nord .bg-slate-100,
+html.theme-nord .bg-slate-800 {
+  background-color: #2e3440 !important;
+}
+html.theme-nord .border-slate-100,
+html.theme-nord .border-slate-200,
+html.theme-nord .border-slate-800,
+html.theme-nord .border-slate-750 {
+  border-color: #434c5e !important;
+}
+html.theme-nord .text-slate-900,
+html.theme-nord .text-slate-950,
+html.theme-nord .text-slate-800,
+html.theme-nord .text-slate-700 {
+  color: #eceff4 !important;
+}
+html.theme-nord .text-slate-500,
+html.theme-nord .text-slate-400 {
+  color: #d8dee9 !important;
+}
+
+/* --- PRINT MEDIA FORMATTING (PDF & PHYSICAL PRINTERS) --- */
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+  
+  html, body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide interactive controls and floating navigation */
+  button, .no-print {
+    display: none !important;
+  }
+
+  /* Print table adjustments */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    font-weight: bold !important;
+  }
+
+  /* Prevent page splitting inside table rows */
+  tr, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+

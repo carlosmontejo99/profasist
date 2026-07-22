@@ -1,0 +1,52 @@
+name: Android checks
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Android tests and debug APK
+        working-directory: android
+        run: ./gradlew test assembleDebug
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProfAsist-debug-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+

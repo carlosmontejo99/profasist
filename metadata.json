@@ -1,0 +1,11 @@
+{
+  "name": "ProfAsist",
+  "description": "Offline-first attendance management for professors. Supports exports.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

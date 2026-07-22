@@ -1,0 +1,7 @@
+# Local audit material and generated bundles are retained in the development
+# repository but omitted from source archives intended for public sharing.
+evidence/ export-ignore
+export_samples/ export-ignore
+dist/ export-ignore
+.codebase-memory/ export-ignore
+ANTIGRAVITY_PROMPT.md export-ignore

@@ -1,0 +1,38 @@
+{
+  "name": "profasist",
+  "private": true,
+  "version": "3.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/cli": "^8.0.1",
+    "@capacitor/core": "^8.0.1",
+    "@google/genai": "^2.10.0",
+    "@independo/capacitor-voice-recorder": "^8.3.3",
+    "@types/web-push": "^3.6.4",
+    "express": "^5.2.1",
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.9.0",
+    "web-push": "^3.6.7",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "esbuild": "^0.28.1",
+    "tailwindcss": "^4.3.1",
+    "tsx": "^4.22.4",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

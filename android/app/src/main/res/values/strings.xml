@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ProfAsist</string>
+    <string name="title_activity_main">ProfAsist</string>
+    <string name="package_name">com.carlos.profasist</string>
+    <string name="custom_url_scheme">com.carlos.profasist</string>
+</resources>
