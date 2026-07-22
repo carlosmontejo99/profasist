@@ -42,11 +42,21 @@ La APK se genera en
 - `TEST_MATRIX.md`: pruebas realmente ejecutadas y pendientes.
 - `KNOWN_LIMITATIONS.md`: riesgos conocidos.
 - `CHANGELOG.md`: historial de cambios.
-- `evidence/`: capturas y logcat.
-- `export_samples/`: muestras disponibles, sin implicar compatibilidad no probada.
+- `CITATION.cff`: metadatos de autoría y citación académica.
+
+Las carpetas locales `evidence/` y `export_samples/` se conservan fuera del
+repositorio público porque pueden contener datos o muestras de auditoría.
+
+## Licencia y citación
+
+ProfAsist se distribuye bajo la licencia GNU GPL versión 3 exclusivamente.
+Consulta [LICENSE](LICENSE) para conocer las condiciones completas. GitHub puede
+generar una cita desde `CITATION.cff`; el DOI se añadirá únicamente después de
+archivar una Release estable mediante Zenodo.
 
 ## Preparación para GitHub
 
-Antes de publicar: crear un keystore de producción, documentar su custodia,
-configurar secretos de CI, agregar una licencia elegida por el propietario y
-repetir la prueba de actualización usando la firma definitiva.
+Antes de publicar una Release estable: crear un keystore de producción,
+documentar su custodia, configurar secretos de CI y repetir la prueba de
+actualización usando la firma definitiva. Después se podrá activar la integración
+con Zenodo y archivar la Release para obtener el DOI.
