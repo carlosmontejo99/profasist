@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Si utiliza ProfAsist, cite el software usando estos metadatos."
+title: "ProfAsist: asistente docente local para asistencia y evaluación"
+type: software
+authors:
+  - family-names: "Montejo Dávila"
+    given-names: "Carlos"
+    orcid: "https://orcid.org/0000-0002-4607-8538"
+version: 3.0.1
+date-released: 2026-07-22
+license: GPL-3.0-only
+repository-code: "https://github.com/carlosmontejo99/profasist"
+url: "https://github.com/carlosmontejo99/profasist"
+abstract: >-
+  Aplicación Android local-first para gestionar asistencia, evaluaciones y
+  seguimiento académico desde el dispositivo del profesor.
+keywords:
+  - educación
+  - asistencia
+  - evaluación
+  - docentes
+  - Android
+  - local-first
