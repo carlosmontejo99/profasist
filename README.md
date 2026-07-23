@@ -84,6 +84,16 @@ ProfAsist cuenta con una arquitectura de interfaz responsiva con el tema **Árti
 - **Audio**: Web Audio API / MediaRecorder API con integración háptica nativa.
 - **Almacenamiento**: LocalStorage / IndexedDB (Local-First, Privacy Preserving).
 
+```mermaid
+graph TD
+    A["👤 Profesor / Docente"] -->|Pase de Lista & Notas| B["📱 UI React 18 (Nord Dark Mode)"]
+    B -->|Importación .ics / .xlsx| C["⚙️ Motor de Ponderación & Algoritmos"]
+    B -->|Audio en Vivo con Pausa| D["🎙️ Web Audio API & Record Module"]
+    C -->|Persistencia 100% Offline| E["💾 Storage Local Seguro (En Dispositivo)"]
+    C -->|Recordatorios| F["🔔 Capacitor Local Notifications (Android)"]
+    C -->|Cierre de Curso| G["📄 Exportación a Excel (.xlsx) & PDF"]
+```
+
 ---
 
 ## 🚀 Desarrollo y Compilación Local
