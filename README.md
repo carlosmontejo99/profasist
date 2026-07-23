@@ -4,7 +4,7 @@
 [![Versión](https://img.shields.io/badge/Version-3.0.1-emerald.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android-indigo.svg)](https://capacitorjs.com/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.123456.svg)](https://zenodo.org/account/settings/github/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21501969.svg)](https://doi.org/10.5281/zenodo.21501969)
 
 > **La herramienta offline local-first diseñada para el docente moderno: pasa lista en segundos, califica sin fricción mental y genera actas de evaluación auto-equilibradas sin depender de hojas de cálculo pesadas.**
 
@@ -125,7 +125,8 @@ Para citas académicas o científicas del software:
   author = {Montejo Dávila, Carlos},
   title = {ProfAsist: Asistente docente offline local-first para asistencia, evaluación y seguimiento académico},
   year = {2026},
-  url = {https://github.com/carlosmontejo99/profasist}
+  doi = {10.5281/zenodo.21501969},
+  url = {https://doi.org/10.5281/zenodo.21501969}
 }
 ```
 
