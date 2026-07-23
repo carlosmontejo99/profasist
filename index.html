@@ -67,9 +67,16 @@
   <body class="bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-screen overflow-hidden transition-colors">
     <div id="root"></div>
     <script>
-      if ('serviceWorker' in navigator) {
+      // Service Worker solo en navegadores PWA, desintervenir en Capacitor WebView para evitar cache de hashes antiguos
+      if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform()) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      } else if ('serviceWorker' in navigator && window.Capacitor?.isNativePlatform()) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
         });
       }
     </script>

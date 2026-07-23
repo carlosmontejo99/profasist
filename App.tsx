@@ -23,6 +23,7 @@ import { AcademicAnalytics } from './src/components/AcademicAnalytics';
 import { AcademicClosure } from './src/components/AcademicClosure';
 import { StudentImporter } from './src/components/StudentImporter';
 import { AudioHaptics } from './services/audioHaptics';
+import { NotificationServ } from './services/notificationService';
 import { StudentRandomizerModal } from './src/components/StudentRandomizerModal';
 import { ClassroomTimerModal } from './src/components/ClassroomTimerModal';
 
@@ -546,6 +547,7 @@ const App: React.FC = () => {
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => AudioHaptics.getSoundEnabled());
   const [hapticsEnabled, setHapticsEnabled] = useState(() => AudioHaptics.getHapticsEnabled());
+  const [audioSettings, setAudioSettings] = useState(() => AudioHaptics.getSettings());
   const [gdriveFileInfo, setGdriveFileInfo] = useState<{ id: string; name: string; modifiedTime?: string; size?: string } | null>(null);
   const [isAddFolderOpen, setIsAddFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -603,9 +605,16 @@ const App: React.FC = () => {
     return localStorage.getItem('local_notifications_enabled') === 'true';
   });
 
-  const [notificationPermission, setNotificationPermission] = useState<string>(() => {
-    return ('Notification' in window) ? Notification.permission : 'denied';
-  });
+  const [notificationPermission, setNotificationPermission] = useState<string>('default');
+
+  useEffect(() => {
+    NotificationServ.getStatus().then(status => {
+      setNotificationPermission(status.granted ? 'granted' : 'default');
+      if (status.granted && localNotificationsEnabled) {
+        NotificationServ.scheduleGroupReminders(data.groups);
+      }
+    });
+  }, [data.groups, localNotificationsEnabled]);
   const notifiedKeysRef = useRef<Set<string>>(new Set());
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -860,71 +869,42 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRequestNotificationPermission = () => {
-    if (!('Notification' in window)) {
-      setNotification('Tu navegador no soporta notificaciones de escritorio.');
-      return;
+  const handleRequestNotificationPermission = async () => {
+    setNotification('Solicitando permiso de notificaciones...');
+    const granted = await NotificationServ.requestPermissions();
+    if (granted) {
+      setNotificationPermission('granted');
+      setLocalNotificationsEnabled(true);
+      localStorage.setItem('local_notifications_enabled', 'true');
+      await NotificationServ.scheduleGroupReminders(data.groups);
+      setNotification('¡Notificaciones nativas activadas correctamente! 🔔');
+    } else {
+      setNotificationPermission('denied');
+      setNotification('Permiso denegado. Actívalo en los ajustes de tu sistema/navegador.');
     }
-    Notification.requestPermission().then(async permission => {
-      setNotificationPermission(permission);
-      if (permission === 'granted') {
-        setNotification('¡Permiso concedido! Configurando alertas persistentes...');
-        setLocalNotificationsEnabled(true);
-        localStorage.setItem('local_notifications_enabled', 'true');
-        
-        // Subscribe to persistent Web Push
-        await registerAndSubscribePush();
-        await syncSchedulesWithServer(data.groups);
-        setNotification('¡Notificaciones persistentes en segundo plano activadas!');
-      } else if (permission === 'denied') {
-        setNotification('Permiso denegado. Habilítalo en tu navegador.');
-      }
-    });
   };
 
   const handleToggleLocalNotifications = async () => {
     const newVal = !localNotificationsEnabled;
     setLocalNotificationsEnabled(newVal);
     localStorage.setItem('local_notifications_enabled', String(newVal));
-    setNotification(newVal ? 'Recordatorios activados.' : 'Recordatorios desactivados.');
-    
+
     if (newVal) {
-      // Subscribing & Syncing
-      await registerAndSubscribePush();
-      await syncSchedulesWithServer(data.groups);
-      setNotification('Alertas en segundo plano sincronizadas correctamente.');
+      await NotificationServ.scheduleGroupReminders(data.groups);
+      setNotification('Recordatorios de clases activados.');
+    } else {
+      await NotificationServ.cancelAll();
+      setNotification('Recordatorios de clases desactivados.');
     }
   };
 
   const handleSendTestNotification = async () => {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-      setNotification('No se ha concedido permiso para notificaciones.');
-      return;
-    }
-    try {
-      // Try sending a real background push notification first
-      setNotification('Enviando alerta de prueba en segundo plano...');
-      const response = await fetch('/api/notifications/test', { method: 'POST' });
-      const result = await response.json();
-      if (response.ok) {
-        setNotification('¡Alerta de prueba recibida en segundo plano!');
-      } else {
-        // Fallback to local notification
-        const n = new Notification('ProfAsist: Prueba de Alerta Local', {
-          body: '¡Excelente! Los recordatorios locales están listos.',
-          requireInteraction: true
-        });
-        n.onclick = () => window.focus();
-        setNotification('Prueba de alerta local disparada (sin conexión push).');
-      }
-    } catch (e) {
-      // Fallback
-      const n = new Notification('ProfAsist: Prueba de Alerta Local', {
-        body: '¡Excelente! Los recordatorios locales están listos.',
-        requireInteraction: true
-      });
-      n.onclick = () => window.focus();
-      setNotification('Prueba de alerta local disparada.');
+    setNotification('Enviando alerta de prueba a tu dispositivo...');
+    const success = await NotificationServ.sendTestNotification();
+    if (success) {
+      setNotification('¡Alerta de prueba enviada con éxito! 🔔');
+    } else {
+      setNotification('No se pudo enviar la alerta. Verifica los permisos.');
     }
   };
 
@@ -2342,33 +2322,25 @@ const App: React.FC = () => {
 
                     <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col gap-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Permiso del Navegador</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Estado de Notificaciones Nativas</span>
                         <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md ${
                           notificationPermission === 'granted' 
                             ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' 
-                            : notificationPermission === 'denied'
-                              ? 'bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                            : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
                         }`}>
-                          {notificationPermission === 'granted' ? 'Permitido' : notificationPermission === 'denied' ? 'Bloqueado' : 'Pendiente'}
+                          {notificationPermission === 'granted' ? 'Activo' : 'Pendiente'}
                         </span>
                       </div>
 
                       <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 dark:border-slate-800/60">
-                        {notificationPermission === 'default' && (
+                        {notificationPermission !== 'granted' ? (
                           <button 
                             onClick={handleRequestNotificationPermission}
-                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all shadow-xs"
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2"
                           >
-                            Permitir Notificaciones
+                            <Bell size={16} /> Permitir Notificaciones Nativas
                           </button>
-                        )}
-                        {notificationPermission === 'denied' && (
-                          <p className="text-[10px] text-rose-500 font-bold text-center">
-                            ⚠️ El permiso está bloqueado. Por favor re-actívalo en los ajustes de tu navegador para recibir alertas.
-                          </p>
-                        )}
-                        {notificationPermission === 'granted' && (
+                        ) : (
                           <div className="space-y-3">
                             <button 
                               onClick={handleToggleLocalNotifications}
@@ -2384,9 +2356,9 @@ const App: React.FC = () => {
                             {localNotificationsEnabled && (
                               <button 
                                 onClick={handleSendTestNotification}
-                                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-indigo-200/50 dark:border-indigo-800/50"
                               >
-                                Enviar Alerta de Prueba
+                                🔔 Enviar Alerta de Prueba a la Barra de Estado
                               </button>
                             )}
                           </div>
@@ -2444,56 +2416,209 @@ const App: React.FC = () => {
               )}
               {settingsActiveTab === 'audio' && (
                 <div className="space-y-6">
-                  {/* CONFIGURACIÓN DE SONIDO Y HÁPTICA */}
+                  {/* CONFIGURACIÓN INTELIGENTE DE SONIDO Y HÁPTICA */}
                   <div className="p-5 bg-slate-50 dark:bg-slate-850 rounded-[2rem] border border-slate-100 dark:border-slate-800 space-y-4">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
                         <Volume2 size={20} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm text-slate-900 dark:text-white">Feedback Sonoro y Vibración</h3>
-                        <p className="text-[10px] uppercase font-black tracking-wider text-slate-400 mt-0.5">Efectos táctiles de la app</p>
+                        <h3 className="font-bold text-sm text-slate-900 dark:text-white">Sistema Inteligente de Audio y Vibración</h3>
+                        <p className="text-[10px] uppercase font-black tracking-wider text-slate-400 mt-0.5">Control fino y feedback táctil</p>
                       </div>
                     </div>
 
+                    {/* INTERRUPTOR PRINCIPAL DE SONIDO */}
                     <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <Volume2 size={14} className="text-indigo-500" /> Efectos de Sonido
+                          <Volume2 size={14} className="text-indigo-500" /> Efectos de Sonido Sintetizado
                         </span>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Sonido sutil en asistencias, ruleta y botones</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Sonido offline Web Audio API sin consumir datos</p>
                       </div>
                       <input 
                         type="checkbox"
-                        checked={soundEnabled}
+                        checked={audioSettings.soundEnabled}
                         onChange={(e) => {
                           const val = e.target.checked;
-                          setSoundEnabled(val);
-                          AudioHaptics.setSoundEnabled(val);
+                          const updated = { ...audioSettings, soundEnabled: val };
+                          setAudioSettings(updated);
+                          AudioHaptics.updateSettings({ soundEnabled: val });
                           if (val) AudioHaptics.playPop();
                         }}
                         className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
                       />
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <Smartphone size={14} className="text-indigo-500" /> Vibración Háptica
-                        </span>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Feedback táctil en el teléfono al presionar</p>
+                    {/* CONTROL DE VOLUMEN (SLIDER) */}
+                    {audioSettings.soundEnabled && (
+                      <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200">
+                          <span>Volumen General de Efectos</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-mono">{Math.round(audioSettings.soundVolume * 100)}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={audioSettings.soundVolume}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            const updated = { ...audioSettings, soundVolume: val };
+                            setAudioSettings(updated);
+                            AudioHaptics.updateSettings({ soundVolume: val });
+                          }}
+                          onMouseUp={() => AudioHaptics.playPop()}
+                          onTouchEnd={() => AudioHaptics.playPop()}
+                          className="w-full accent-indigo-600 cursor-pointer h-2 bg-slate-100 dark:bg-slate-800 rounded-lg"
+                        />
                       </div>
-                      <input 
-                        type="checkbox"
-                        checked={hapticsEnabled}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setHapticsEnabled(val);
-                          AudioHaptics.setHapticsEnabled(val);
-                          if (val) AudioHaptics.vibrateSuccess();
-                        }}
-                        className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
-                      />
+                    )}
+
+                    {/* INTERRUPTOR PRINCIPAL DE VIBRACIÓN Y SELECTOR DE INTENSIDAD HÁPTICA */}
+                    <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <Smartphone size={14} className="text-indigo-500" /> Vibración y Respuesta Háptica
+                          </span>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">Feedback físico al presionar botones y tomar lista</p>
+                        </div>
+                        <input 
+                          type="checkbox"
+                          checked={audioSettings.hapticsEnabled}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            const updated = { ...audioSettings, hapticsEnabled: val };
+                            setAudioSettings(updated);
+                            AudioHaptics.updateSettings({ hapticsEnabled: val });
+                            if (val) AudioHaptics.vibrateSuccess();
+                          }}
+                          className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
+                        />
+                      </div>
+
+                      {audioSettings.hapticsEnabled && (
+                        <div className="pt-2 border-t border-slate-50 dark:border-slate-800">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Intensidad Háptica</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'light', label: 'Suave', desc: 'Discreta' },
+                              { id: 'medium', label: 'Normal', desc: 'Estándar' },
+                              { id: 'heavy', label: 'Intensa', desc: 'Fuerte' }
+                            ].map((lvl) => (
+                              <button
+                                key={lvl.id}
+                                onClick={() => {
+                                  const updated = { ...audioSettings, hapticsIntensity: lvl.id as any };
+                                  setAudioSettings(updated);
+                                  AudioHaptics.updateSettings({ hapticsIntensity: lvl.id as any });
+                                  AudioHaptics.vibrateSuccess();
+                                }}
+                                className={`py-2 px-3 rounded-xl border text-center transition-all ${
+                                  audioSettings.hapticsIntensity === lvl.id
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm font-bold'
+                                    : 'bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+                                }`}
+                              >
+                                <div className="text-xs font-black">{lvl.label}</div>
+                                <div className="text-[9px] opacity-80 mt-0.5">{lvl.desc}</div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* EVENTOS ACTIVOS */}
+                    <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Efectos por Acción</label>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={audioSettings.soundAttendance}
+                            onChange={(e) => {
+                              const updated = { ...audioSettings, soundAttendance: e.target.checked };
+                              setAudioSettings(updated);
+                              AudioHaptics.updateSettings({ soundAttendance: e.target.checked });
+                            }}
+                            className="accent-indigo-600 rounded"
+                          />
+                          <span>Pase de Lista</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={audioSettings.soundTimer}
+                            onChange={(e) => {
+                              const updated = { ...audioSettings, soundTimer: e.target.checked };
+                              setAudioSettings(updated);
+                              AudioHaptics.updateSettings({ soundTimer: e.target.checked });
+                            }}
+                            className="accent-indigo-600 rounded"
+                          />
+                          <span>Temporizador</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={audioSettings.soundRoulette}
+                            onChange={(e) => {
+                              const updated = { ...audioSettings, soundRoulette: e.target.checked };
+                              setAudioSettings(updated);
+                              AudioHaptics.updateSettings({ soundRoulette: e.target.checked });
+                            }}
+                            className="accent-indigo-600 rounded"
+                          />
+                          <span>Ruleta Alumnos</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={audioSettings.soundUI}
+                            onChange={(e) => {
+                              const updated = { ...audioSettings, soundUI: e.target.checked };
+                              setAudioSettings(updated);
+                              AudioHaptics.updateSettings({ soundUI: e.target.checked });
+                            }}
+                            className="accent-indigo-600 rounded"
+                          />
+                          <span>Botones e Interfaz</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* VISTA PREVIA E INTERACTIVA DE PRUEBAS */}
+                    <div className="pt-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Probar Tono y Vibración al Instante</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button 
+                          onClick={() => AudioHaptics.playPresent()}
+                          className="py-2.5 px-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-all border border-emerald-200/50 dark:border-emerald-800/50"
+                        >
+                          Presente (P)
+                        </button>
+                        <button 
+                          onClick={() => AudioHaptics.playAbsent()}
+                          className="py-2.5 px-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-rose-100 transition-all border border-rose-200/50 dark:border-rose-800/50"
+                        >
+                          Falta (F)
+                        </button>
+                        <button 
+                          onClick={() => AudioHaptics.playAlarm()}
+                          className="py-2.5 px-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-amber-100 transition-all border border-amber-200/50 dark:border-amber-800/50"
+                        >
+                          Alarma Fin
+                        </button>
+                        <button 
+                          onClick={() => AudioHaptics.vibrateSuccess()}
+                          className="py-2.5 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-200/50 dark:border-indigo-800/50"
+                        >
+                          Vibración Háptica
+                        </button>
+                      </div>
                     </div>
                   </div>
 
