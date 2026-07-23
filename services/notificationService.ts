@@ -45,16 +45,18 @@ class NotificationService {
     if (this.isNative) {
       try {
         const perm = await LocalNotifications.checkPermissions();
+        const webGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
         return {
           supported: true,
-          granted: perm.display === 'granted',
+          granted: perm.display === 'granted' || webGranted,
           isNative: true
         };
       } catch (e) {
-        return { supported: false, granted: false, isNative: true };
+        const webGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+        return { supported: true, granted: webGranted, isNative: true };
       }
     } else {
-      const supported = 'Notification' in window;
+      const supported = typeof Notification !== 'undefined';
       const granted = supported && Notification.permission === 'granted';
       return { supported, granted, isNative: false };
     }
@@ -67,17 +69,19 @@ class NotificationService {
     if (this.isNative) {
       try {
         const req = await LocalNotifications.requestPermissions();
-        if (req.display === 'granted') {
-          await this.initNativeChannels();
-          return true;
-        }
-        return false;
+        await this.initNativeChannels();
+        const status = await this.getStatus();
+        return status.granted;
       } catch (e) {
         console.error('Error requesting native notification permissions:', e);
+        if (typeof Notification !== 'undefined') {
+          const res = await Notification.requestPermission();
+          return res === 'granted';
+        }
         return false;
       }
     } else {
-      if (!('Notification' in window)) return false;
+      if (typeof Notification === 'undefined') return false;
       const result = await Notification.requestPermission();
       return result === 'granted';
     }

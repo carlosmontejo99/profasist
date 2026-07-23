@@ -1353,6 +1353,7 @@ const App: React.FC = () => {
       setIsRecording(true);
       setIsPaused(false);
       timerIntervalRef.current = setInterval(() => {
+        if (isPausedRef.current) return;
         recordingDurationRef.current += 1;
         const next = recordingDurationRef.current;
         setRecordingDuration(next);
@@ -1366,12 +1367,26 @@ const App: React.FC = () => {
     }
   };
 
-  const pauseRecording = () => {
-    setIsPaused(true);
+  const pauseRecording = async () => {
+    try {
+      await VoiceRecorder.pauseRecording();
+      setIsPaused(true);
+      AudioHaptics.playPop();
+    } catch (err) {
+      console.error('Error al pausar grabacion:', err);
+      setIsPaused(true);
+    }
   };
 
-  const resumeRecording = () => {
-    setIsPaused(false);
+  const resumeRecording = async () => {
+    try {
+      await VoiceRecorder.resumeRecording();
+      setIsPaused(false);
+      AudioHaptics.playPop();
+    } catch (err) {
+      console.error('Error al reanudar grabacion:', err);
+      setIsPaused(false);
+    }
   };
 
   const stopRecording = (cancelled = false) => {
