@@ -151,6 +151,69 @@ html.theme-nord .text-slate-400 {
   color: #d8dee9 !important;
 }
 
+/* --- WCAG AAA CONTRAST & VISUAL POLISH (v3.1) --- */
+:root {
+  --profasist-muted: #475569;
+  --profasist-subtle: #334155;
+  --profasist-border: #e2e8f0;
+}
+html.dark {
+  --profasist-muted: #cbd5e1;
+  --profasist-subtle: #e2e8f0;
+  --profasist-border: #1e293b;
+}
+
+@media screen {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Slate-400/500 on light backgrounds fall below WCAG AAA; raise them to
+     slate-600 (7.5:1 on white) and slate-300 in dark mode (11:1). Theme
+     overrides keep their own higher-specificity palettes. */
+  .text-slate-400,
+  .text-slate-500 {
+    color: var(--profasist-muted) !important;
+  }
+  .dark .text-slate-400,
+  .dark .text-slate-500 {
+    color: var(--profasist-muted) !important;
+  }
+
+  .border-slate-100 {
+    border-color: var(--profasist-border) !important;
+  }
+  .dark .border-slate-800 {
+    border-color: var(--profasist-border) !important;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--profasist-muted) !important;
+    opacity: .85;
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -.015em;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: #c7d2fe;
+    color: #1e1b4b;
+  }
+}
+
 /* --- PRINT MEDIA FORMATTING (PDF & PHYSICAL PRINTERS) --- */
 @media print {
   @page {

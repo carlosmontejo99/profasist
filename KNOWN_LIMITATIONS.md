@@ -43,3 +43,26 @@ Para garantizar total honestidad y claridad en la distribución entre docentes, 
 - **Regla**: ProfAsist v3.1 redondea a 1 decimal con **half-up** (`6.95 → 7.0`, `9.95 → 10.0`). La app y las fórmulas `ROUND(...,1)` del XLSX usan la misma regla.
 - **Diferencia histórica**: Las actas 2026-B se generaron con el redondeo binario de Python. En fronteras exactas `.x5` pueden existir diferencias de **0.1** (`9.95 → 9.9` en el acta histórica vs `10.0` en la app). Los promedios finales afectados son casos aislados; el desglose oficial se conserva en los archivos del vault.
 - **Resolución docente**: Los casos ajustados manualmente (por ejemplo, bitácoras validadas) se representan con `finalOverrides`, que conserva el motivo, la fecha y el actor.
+
+---
+
+## 5. Sincronización ADB
+- **Estado**: Funcional en la APK **agent**; la release normal no expone `webview_devtools_remote`.
+- **Requisitos**: `adb`, Python 3.10+, Playwright y el build type `agent`.
+- **Seguridad**: `push` es dry-run por defecto; `--apply` guarda snapshot local y en el dispositivo, y restaura si el hash no coincide.
+- **Limitación**: el socket solo existe mientras la app está abierta y la APK instalada es la `agent`.
+
+---
+
+## 6. Auditoría de entregas multicanal
+- **Canales**: Teams, Outlook, WhatsApp, presencial, USB u otro.
+- **Ingesta**: CSV/JSON exportado por el docente. No hay OAuth ni Microsoft Graph dentro de la app para preservar el principio local-first.
+- **Duplicados**: se detectan por alumno + actividad + mismo día o misma referencia de evidencia; se omiten y se reportan, no se aplican automáticamente.
+- **Evidencia**: el archivo físico no se copia al teléfono; se guarda la referencia (nombre, URL o mensaje).
+
+---
+
+## 7. Splash y contraste visual
+- **Splash**: visible ~500 ms tras `load`, con fallback de 4 s y fade-out; respeta `prefers-reduced-motion`.
+- **Contraste**: se elevaron los textos atenuados a slate-600 en claro y slate-300 en oscuro. Los temas Solarized/Emerald/Nord conservan sus paletas específicas.
+- **Iconografía**: las pestañas de Ajustes y las cabeceras usan iconos SVG de `lucide-react`; los emojis que quedan en nombres de materias son datos del usuario, no iconos de navegación.

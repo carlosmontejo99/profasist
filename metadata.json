@@ -1,6 +1,7 @@
 {
   "name": "ProfAsist",
-  "description": "Offline-first attendance management for professors. Supports exports.",
+  "version": "3.1.0",
+  "description": "Offline-first attendance, grading, delivery audit and institutional 4-sheet reports for professors.",
   "requestFramePermissions": [
     "camera",
     "microphone"

@@ -62,9 +62,88 @@
         display: flex;
         flex-direction: column;
       }
+
+      /* --- PROFASIST SPLASH --- */
+      #profasist-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(120% 100% at 50% 0%, #312e81 0%, #0f172a 58%, #020617 100%);
+        color: #ffffff;
+        transition: opacity 450ms ease, visibility 450ms ease;
+      }
+      #profasist-splash.is-hiding {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .ps-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        animation: ps-rise 550ms cubic-bezier(.2, .8, .2, 1);
+      }
+      .ps-logo {
+        width: 92px;
+        height: 92px;
+        border-radius: 26px;
+        box-shadow:
+          0 24px 60px -18px rgba(79, 70, 229, .75),
+          0 0 0 1px rgba(255, 255, 255, .14) inset;
+      }
+      .ps-title {
+        font: 900 30px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: -.04em;
+      }
+      .ps-sub {
+        font: 800 9px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        color: #c7d2fe;
+      }
+      .ps-bar {
+        width: 150px;
+        height: 3px;
+        margin-top: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .14);
+        overflow: hidden;
+      }
+      .ps-bar span {
+        display: block;
+        height: 100%;
+        width: 45%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #818cf8, #c7d2fe);
+        animation: ps-load 1000ms ease-in-out infinite;
+      }
+      @keyframes ps-rise {
+        from { opacity: 0; transform: translateY(10px) scale(.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes ps-load {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(260%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ps-card { animation: none; }
+        .ps-bar span { animation: none; width: 100%; }
+      }
     </style>
 </head>
   <body class="bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-screen overflow-hidden transition-colors">
+    <div id="profasist-splash" role="status" aria-label="Cargando ProfAsist">
+      <div class="ps-card">
+        <img class="ps-logo" src="/icon.svg" alt="" />
+        <div class="ps-title">ProfAsist</div>
+        <div class="ps-sub">Gestión docente soberana</div>
+        <div class="ps-bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script>
       // Service Worker solo en navegadores PWA, desintervenir en Capacitor WebView para evitar cache de hashes antiguos
@@ -79,6 +158,28 @@
           }
         });
       }
+    </script>
+    <script>
+      // Splash: 500 ms después de load, con fallback de 4 s si algo falla.
+      (function () {
+        var splash = document.getElementById('profasist-splash');
+        if (!splash) return;
+        var finished = false;
+        function hide() {
+          if (finished) return;
+          finished = true;
+          splash.classList.add('is-hiding');
+          window.setTimeout(function () {
+            if (splash.parentNode) splash.parentNode.removeChild(splash);
+          }, 480);
+        }
+        function schedule() {
+          window.setTimeout(hide, 500);
+        }
+        if (document.readyState === 'complete') schedule();
+        else window.addEventListener('load', schedule, { once: true });
+        window.setTimeout(hide, 4000);
+      })();
     </script>
   <script type="module" src="/index.tsx"></script>
 </body>

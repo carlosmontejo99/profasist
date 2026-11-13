@@ -1,7 +1,7 @@
 # ProfAsist
 
 [![Licencia GNU GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/Version-3.0.1-emerald.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Version-3.1.0-emerald.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android-indigo.svg)](https://capacitorjs.com/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21501969.svg)](https://doi.org/10.5281/zenodo.21501969)
@@ -57,15 +57,31 @@ Diseñé **ProfAsist** para resolver ese problema cotidiano: una herramienta ág
 ### 🔔 6. Recordatorios y Notificaciones Nativas
 - Recibe recordatorios en la barra de estado de tu teléfono Android para no olvidar pasar lista antes de cada clase.
 
+### 📥 7. Auditoría de Entregas Multicanal
+- Registra entregas recibidas por **Teams, Outlook, WhatsApp, USB o presencial**, con evidencia, fecha y nota.
+- Importa listados **CSV/JSON** y detecta duplicados antes de aplicar calificaciones.
+- Calcula cobertura por actividad y muestra los huecos de entrega para que ninguna evidencia se pierda.
+
+### 📑 8. Actas Institucionales de 4 Pestañas
+- Genera un libro `.xlsx` por materia con **Resumen Semestral**, **Parcial 1**, **Parcial 2** y **Parcial 3**.
+- Fórmulas nativas, paneles congelados y recálculo al abrir (`fullCalcOnLoad`).
+- Semáforo de acreditación verde/rojo y datos institucionales parametrizables (Universidad, Instituto, Laboratorio, Semestre, Profesor).
+
+### 🤖 9. Modo Agente y Sincronización ADB
+- Exporta/restaura snapshots locales y conserva hasta 20 copias automáticas en IndexedDB.
+- El CLI `tools/adb_bridge/` permite `doctor`, `pull`, `diff`, `push` y `audit` con merge idempotente.
+- La APK **agent** expone el WebView DevTools solo para sincronización local; la release normal no.
+
 ---
 
 ## 🛠️ Tecnologías Utilizadas
 
-- **Interfaz**: React 18, TypeScript, Vite.
-- **Runtime Móvil**: Capacitor 7 (Android).
-- **Procesamiento de Archivos**: SheetJS para Excel e `ical.js` para calendarios `.ics`.
+- **Interfaz**: React 19, TypeScript, Vite.
+- **Runtime Móvil**: Capacitor 8 (Android).
+- **Procesamiento de Archivos**: ExcelJS para actas institucionales, SheetJS para importación e `ical.js` para calendarios `.ics`.
 - **Audio y Notificaciones**: Web Audio API y Capacitor Local Notifications.
 - **Almacenamiento**: LocalStorage / IndexedDB (100% Local en el dispositivo).
+- **Sincronización**: ADB + Chrome DevTools Protocol (Playwright).
 
 ```mermaid
 graph TD

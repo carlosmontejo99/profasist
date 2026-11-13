@@ -1,30 +1,29 @@
 # 🤖 ProfAsist Agent & Developer Interoperability Protocol (AGENT_BRIDGE)
-> **Versión del Protocolo:** 1.0.0 · **Aplica a:** ProfAsist v3.x / v4.x  
-> **Destinatarios:** Agentes de IA autónomos (Antigravity, OpenCode, Claude Code) y Desarrolladores Humanos.  
+> **Versión del Protocolo:** 1.1.0 · **Aplica a:** ProfAsist v3.1.x / v4.x
+> **Destinatarios:** Agentes de IA autónomos (Antigravity, OpenCode, Claude Code) y desarrolladores humanos.
 > **Misión:** Garantizar interoperabilidad determinista, auditoría local y sincronización soberana de evaluaciones académicas sin pérdida de datos ni duplicación de estado.
 
 ---
 
 ## 🧭 1. Manifiesto de Co-Existencia Humano-IA
 
-ProfAsist está diseñado con una arquitectura **Local-First y Soberana**. Todo dato evaluativo reside en el dispositivo del docente.
-Cualquier agente de inteligencia artificial que interactúe con ProfAsist debe adherirse a tres reglas inviolables:
-1. **Soberanía del Docente (Human-in-the-Loop):** La IA propone, audita, formatea y valida; el docente autoriza y tiene la última palabra sobre cualquier calificación o publicación externa.
-2. **Determinismo y Cero Alucinación:** Las fórmulas de cálculo deben ser exactas. Jamás redondear arbitrariamente sin seguir las reglas institucionales (e.g. escala UACJ, calificación mínima 7.0).
-3. **No-Duplicación de Estado:** Modificar o inyectar datos requiere preservar la integridad referencial de `students`, `categories` y `activities`. Prohibido crear claves huérfanas en `evaluations`.
+ProfAsist es **Local-First y soberano**. Todo dato evaluativo reside en el dispositivo del docente. Tres reglas inviolables:
+
+1. **Soberanía del docente (Human-in-the-Loop):** la IA propone, audita, formatea y valida; el docente autoriza y tiene la última palabra sobre cualquier calificación o publicación.
+2. **Determinismo y cero alucinación:** las fórmulas son explícitas y auditables. La app usa redondeo **half-up** a 1 decimal; el XLSX usa `ROUND(...,1)` con `fullCalcOnLoad`.
+3. **No duplicación de estado:** toda escritura preserva la integridad referencial de `groups`, `students`, `categories`, `activities` y `evaluations`. Prohibido crear claves huérfanas.
+
+> **Corrección v1.1.0:** la versión 1.0.0 describía `evaluations` como un mapa `{[parcialId]: ...}` y omitía `sessions`, `attendance`, `reporting` y `deliveries`. El esquema real es el de `types.ts`; este documento se alinea con el código.
 
 ---
 
-## 🔌 2. Mecanismo Canónico de Conexión en Vivo (ADB CDP)
+## 🔌 2. Mecanismo Canónico de Conexión (ADB CDP)
 
-Cuando el dispositivo móvil (físico o emulador) está conectado por USB o red local con depuración activada:
-
-### Topografía de Conexión
 ```
-[Antigravity / OpenCode] 
-       │ (Playwright / CDP Protocol)
+[Antigravity / OpenCode]
+       │ (Playwright / Chrome DevTools Protocol)
        ▼
-   localhost:9223 
+   localhost:9223
        │ (adb forward tcp:9223 localabstract:webview_devtools_remote_<pid>)
        ▼
 [Android WebView: com.carlos.profasist]
@@ -33,89 +32,232 @@ Cuando el dispositivo móvil (físico o emulador) está conectado por USB o red 
 [State Engine: React / TypeScript]
 ```
 
-### Pasos de Vinculación Determinista
-1. **Detectar PID de la aplicación:**
-   ```bash
-   adb shell pidof com.carlos.profasist
-   ```
-2. **Enrutar el socket de inspección Chrome DevTools:**
-   ```bash
-   adb forward tcp:9223 localabstract:webview_devtools_remote_<PID>
-   ```
-3. **Conectar cliente CDP (Python Playwright o Chromium):**
-   ```python
-   browser = await playwright.chromium.connect_over_cdp("http://localhost:9223")
-   page = browser.contexts[0].pages[0]
-   data = await page.evaluate("localStorage.getItem('profasist_v1_data')")
-   ```
+### Requisito de build
+
+El socket solo existe en la APK **agent**. La release normal compila con
+`BuildConfig.AGENT_BRIDGE = false` y no expone WebView debugging.
+
+```bash
+npx cap sync android
+cd android
+JAVA_HOME=/ruta/a/jdk21 ./gradlew assembleAgent
+adb install -r app/build/outputs/apk/agent/app-agent.apk
+```
+
+La configuración `android.webContentsDebuggingEnabled=true` vive en
+`android/app/src/agent/assets/capacitor.config.json`. El build `agent` usa el
+mismo `applicationId`, por lo que conserva los datos al reemplazar la app.
+
+### Vinculación determinista
+
+```bash
+adb shell pidof com.carlos.profasist
+adb forward tcp:9223 localabstract:webview_devtools_remote_<PID>
+python3 tools/adb_bridge/cli.py doctor
+```
+
+El CLI resuelve el socket, valida el target y elimina el forward al terminar.
 
 ---
 
-## 📊 3. Ontología y Esquema de Datos (`profasist_v1_data`)
+## 📊 3. Esquema Real de Datos (`profasist_v1_data`)
 
-El estado global de la aplicación se almacena serializado en `localStorage['profasist_v1_data']`.
-
-### Jerarquía
-```typescript
-interface ProfAsistState {
-  version: string;
+```ts
+interface AppData {
+  version: 2;                       // 1 se migra automáticamente a 2
+  settings: AppSettings;            // incluye institution
   groups: Group[];
+  deliveries?: DeliveryRecord[];
+  auditLog?: AuditLogEntry[];
+  syncMeta?: { lastPullAt?: string; lastPushAt?: string; source?: string; hash?: string };
 }
 
 interface Group {
-  id: string;                     // UUID único del grupo
-  name: string;                   // Nombre visible (e.g. "Enzimología A-L3")
-  schedule?: string;
+  id: string;
+  name: string;
+  semester: string;
+  scheduleSummary: string;
   students: Student[];
-  evaluations: {
-    [parcialId: string]: ParcialEvaluation; // "parcial1", "parcial2", "parcial3"
-  };
+  sessions: Session[];              // asistencia + grabaciones
+  color: string;
+  archived: boolean;
+  evaluations?: GroupEvaluations;
+  closureConfig?: ClosureConfig;
+  reporting?: GroupReporting;       // override institucional por materia
+  finalOverrides?: Record<string, GradeOverride>;
+}
+
+interface GroupEvaluations {
+  parcial1: ParcialEvaluation;
+  parcial2: ParcialEvaluation;
+  parcial3: ParcialEvaluation;
 }
 
 interface ParcialEvaluation {
-  categories: Category[];
-  grades: {
-    [studentId: string]: {
-      [activityId: string]: number; // 0.0 a 10.0
-    };
-  };
+  categories: EvaluationCategory[];
+  grades: Record<string, Record<string, number>>; // studentId -> activityId -> 0..10
 }
 
-interface Category {
-  id: string;        // e.g. "cat_tareas", "cat_resumenes", "cat_reportes", "cat_bitacora"
-  name: string;      // Tareas (20%), Resúmenes (20%), Reportes (20%), Bitácora (40%)
-  weight: number;    // Ponderación porcentual (suma total = 100)
+interface EvaluationCategory {
+  id: string;                       // "cat_tareas", "cat_resumenes", ...
+  name: string;
+  weight: number;                   // 0..100
   activities: Activity[];
 }
 
 interface Activity {
-  id: string;        // ID único de la actividad (e.g. "act_p3_t1")
-  name: string;      // Nombre descriptivo (e.g. "Presentación final P12 y 13")
+  id: string;
+  name: string;
 }
+
+interface DeliveryRecord {
+  id: string;
+  groupId: string;
+  studentId: string;
+  parcialId: 'parcial1' | 'parcial2' | 'parcial3';
+  activityId: string;
+  channel: 'teams' | 'outlook' | 'whatsapp' | 'presencial' | 'usb' | 'otro';
+  receivedAt: string;               // ISO 8601
+  evidenceRef: string;              // archivo, URL o id de mensaje
+  status: 'pendiente' | 'validada' | 'rechazada' | 'duplicada';
+  grade?: number;
+  note?: string;
+  validatedAt?: string;
+  actor: 'docente' | 'agente';
+}
+
+interface AuditLogEntry {
+  id: string;
+  at: string;
+  actor: 'docente' | 'agente';
+  action: string;
+  target: string;
+  before?: string;
+  after?: string;
+}
+```
+
+### Reglas de cálculo
+
+- La nota de una actividad solo participa si es un número finito entre 0 y 10.
+- Una categoría sin notas **se excluye** y los pesos restantes se re-normalizan.
+- Un parcial sin actividades o sin notas devuelve `null`.
+- Si falta un parcial completo, el final es `Pendiente`, no `No Acreditado`.
+- Los parciales se redondean a 1 decimal antes del promedio final.
+- `ROUND` es half-up (`6.95 → 7.0`). Las actas 2026-B generadas con redondeo binario de Python pueden diferir 0.1 en fronteras `.x5`; la app y el XLSX son internamente consistentes.
+- `finalOverrides` permite una resolución docente auditada sin alterar el desglose P1/P2/P3.
+
+---
+
+## 📑 4. Estándar de Actas Institucionales (XLSX)
+
+Un libro por materia, generado con **ExcelJS**, con 4 pestañas exactas:
+
+| Pestaña | Contenido |
+|---|---|
+| `Resumen Semestral` | `No.`, `Matrícula`, `Nombre del Alumno`, `Parcial 1`, `Parcial 2`, `Parcial 3`, `Calificación Final`, `Estatus` |
+| `Parcial 1` | Actividades por categoría, `Prom <Categoría>`, `Calificación Parcial 1` |
+| `Parcial 2` | Ídem P1 |
+| `Parcial 3` | Ídem P1 |
+
+### Fórmulas y formato
+
+- Promedio de categoría: `=IF(COUNT(rango)=0,"",ROUND(AVERAGE(rango),1))`.
+- Parcial: suma ponderada con `IF(ISNUMBER(...))` y denominador de pesos presentes.
+- Resumen: referencia a la celda total de cada parcial.
+- Final: `Pendiente` si falta un parcial; si no, promedio simple o ponderado configurado.
+- `#DCFCE7` para `Acreditado`, `#FEE2E2` para `No Acreditado`, ámbar para `Sin derecho`; `Pendiente` sin relleno.
+- Columnas ocultas I-K: asistencia, calificación por resolución y motivo.
+- `fullCalcOnLoad = true`; paneles congelados en `C5` / `C6`.
+- Nombre: `Acta_Oficial_<Materia>_<Semestre>.xlsx`.
+
+### Metadatos
+
+```ts
+interface InstitutionProfile {
+  university: string;
+  institute: string;
+  laboratoryPrefix: string;
+  professor: string;
+  semesterDefault: string;
+  email?: string;
+}
+```
+
+Resolución: `reporting` del grupo → perfil global → valor derivado. La cabecera
+es `Universidad · Instituto` y `Laboratorio · Semestre · Prof.`; los emojis y el
+sufijo `· Profesor` se eliminan con `cleanGroupName`.
+
+---
+
+## 📥 5. Auditoría de Entregas
+
+- Canales: Teams, Outlook, WhatsApp, presencial, USB u otro.
+- Ingesta CSV/JSON con columnas `Matrícula, Nombre, Parcial, Actividad, Canal, Fecha, Evidencia, Nota, Estado, Motivo`.
+- Matching por matrícula, luego nombre normalizado; actividades por id o nombre.
+- Duplicados por alumno + actividad + mismo día o misma evidencia: se omiten y se reportan.
+- `Aplicar nota` escribe en `evaluations[parcial].grades[studentId][activityId]` y exige confirmación si ya existía otra nota.
+- Cada acción se registra en `auditLog` (máx. 500 entradas).
+- Sin OAuth/Graph: la app sigue siendo local-first; el docente exporta el listado desde Teams/Outlook.
+
+---
+
+## 🚀 6. CLI Determinista (`tools/adb_bridge/`)
+
+```bash
+python3 tools/adb_bridge/cli.py doctor
+python3 tools/adb_bridge/cli.py pull --out backups/phone.json
+python3 tools/adb_bridge/cli.py diff --in master.json
+python3 tools/adb_bridge/cli.py push  --in master.json          # dry-run
+python3 tools/adb_bridge/cli.py push  --in master.json --apply  # escribe
+python3 tools/adb_bridge/cli.py audit --in master.json
+```
+
+- `push` es dry-run por defecto; `--apply` exige confirmación humana.
+- Antes de escribir: snapshot local en `backups/` y copia en el dispositivo (`profasist_v1_data__prev`).
+- Después de escribir: relee, valida y compara hash; si no coincide, restaura la copia previa (código 4).
+- Merge: grupos por id → nombre+semestre; alumnos por id → matrícula → nombre; categorías/actividades por id → nombre; calificaciones traducidas al id local.
+- `sessions`, `attendance`, `recordings` y `closureConfig` se preservan salvo `--include-attendance`.
+- Segundo `push --apply` con el mismo input reporta “Sin cambios”.
+
+---
+
+## 🗂️ 7. Snapshots
+
+- IndexedDB `ProfAsistSnapshotDB`, store `snapshots`, retención de 20.
+- Auto-snapshot debounced 4 s tras cambios de grupo/entrega; hash para evitar duplicados.
+- Panel **Ajustes → Nube → Modo Agente**: exportar, crear, historial, restaurar y activar/desactivar.
+- Restauración validada con `migrateData`; reemplaza el estado completo.
+
+---
+
+## 🛡️ 8. Invariantes de Escritura
+
+1. Validar el esquema antes y después de escribir.
+2. No borrar grupos, alumnos, sesiones ni notas por defecto.
+3. No crear notas huérfanas; validar `studentId` y `activityId`.
+4. No duplicar ids; deduplicar arrays por id.
+5. No escribir si el hash semántico no cambia.
+6. No dejar forwards ADB abiertos.
+7. No exponer CDP en la release normal.
+8. No publicar calificaciones sin confirmación del docente.
+
+---
+
+## 🧪 9. Verificación Mínima
+
+```bash
+npm test                                   # 54 pruebas TS
+python3 -m unittest discover -s tools/adb_bridge/tests  # 11 pruebas
+npm run build
+npx cap sync android
+JAVA_HOME=/ruta/a/jdk21 ./android/gradlew -p android assembleAgent assembleRelease
+python3 scripts/verify_institutional_xlsx.py /tmp/Acta.xlsx --recalc
 ```
 
 ---
 
-## 📑 4. Estándar de Generación de Actas Institucionales (Excel XLSX)
+## 🗺️ 10. Roadmap
 
-Cualquier exportación de calificaciones debe cumplir el estándar oficial de 4 pestañas:
-
-| Pestaña | Propósito | Columnas Clave |
-|---|---|---|
-| **Resumen Semestral** | Concentrado ordinario | Matrícula, Nombre, Parcial 1, Parcial 2, Parcial 3, Calificación Final, Estatus (`Acreditado` / `No Acreditado`). |
-| **Parcial 1** | Desglose P1 | Tareas (20%), Resúmenes (20%), Reportes (20%), Bitácora (40%), Total P1. |
-| **Parcial 2** | Desglose P2 | Tareas (20%), Resúmenes (20%), Reportes (20%), Bitácora (40%), Total P2. |
-| **Parcial 3** | Desglose P3 | Tareas (20%), Resúmenes (20%), Reportes (20%), Bitácora (40%), Total P3. |
-
-### Semáforo de Formato Condicional Invariable
-- **Acreditado ($\ge 7.0$):** Relleno verde sólido `#dcfce7` con tipografía oscura/negrita.
-- **No Acreditado ($< 7.0$):** Relleno rojo sólido `#fee2e2` con tipografía oscura/negrita.
-
----
-
-## 🚀 5. Hoja de Ruta de Modernización (Roadmap v3.1 / v4.0)
-
-1. **Módulo Nativo de Exportación Excel Institucional:** Integrar `xlsx` (SheetJS) directamente en la interfaz móvil para exportar las 4 pestañas con semáforo sin depender de scripts externos.
-2. **Punto de Enlace P2P / Local Sync:** Un botón en la app "Modo Agente / Conectar Exocórtex" que levante un socket o servicio local para sincronizar con Orange Pi / Laptop por WiFi o USB con un solo toque.
-3. **Módulo de Auditoría de Entregas Multicanal:** Registro de entregas recibidas vía Teams Chat, WhatsApp o correo institucional con metadatos de contingencia para trazabilidad docente.
-4. **Respaldo Automático Snapshot:** Exportación automática de `profasist_snapshot_<timestamp>.json` cada vez que se modifique una calificación para prevención total de pérdida de datos.
+- **v3.1 (entregado):** motor único, metadatos, actas de 4 pestañas, auditoría de entregas, snapshots, CLI ADB, build agent, splash y contraste.
+- **v4.0 (pendiente):** extracción modular de `App.tsx`, integración opcional con Microsoft Graph, firma de release de producción y validación en Excel de escritorio.

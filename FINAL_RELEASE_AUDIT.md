@@ -1,5 +1,8 @@
 # Auditoría de liberación — ProfAsist 3.0.1
 
+> **Documento histórico.** La validación vigente de v3.1.0 está en
+> [`docs/VALIDACION_v3.1.0.md`](docs/VALIDACION_v3.1.0.md).
+
 Fecha: 2026-07-22  
 Commit revisado: `bc228ff`  
 Etiqueta previa: `v3.0.0-final-release` (el nombre de la etiqueta no implica

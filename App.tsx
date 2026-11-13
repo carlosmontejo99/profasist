@@ -9,7 +9,7 @@ import {
   Mic, Pause, Play, Download, Volume2, Folder, FolderPlus,
   Sliders, UserCheck, TrendingUp, CloudRain, SunDim, BarChart3, Mail, FileAudio,
   Cloud, RefreshCw, CloudUpload, Unlink, Search, Filter, Bell, BellOff, Share2,
-  Shield, Fingerprint, Dices, VolumeX, Smartphone
+  Shield, Fingerprint, Dices, VolumeX, Smartphone, Building2
 } from 'lucide-react';
 import { AppData, Group, Session, Student, ViewState, AttendanceRecord, AttendanceStatus, AppTheme } from './types';
 import * as Storage from './services/storage';
@@ -2133,53 +2133,53 @@ const App: React.FC = () => {
             <div className="grid grid-cols-5 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6 shrink-0">
               <button 
                 onClick={() => setSettingsActiveTab('backup')}
-                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${
                   settingsActiveTab === 'backup' 
                     ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                💾 Nube
+                <Cloud size={14} /> Nube
               </button>
               <button 
                 onClick={() => setSettingsActiveTab('notifications')}
-                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${
                   settingsActiveTab === 'notifications' 
                     ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                🔔 Alertas
+                <Bell size={14} /> Alertas
               </button>
               <button 
                 onClick={() => setSettingsActiveTab('theme')}
-                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${
                   settingsActiveTab === 'theme' 
                     ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                🎨 Temas
+                <Palette size={14} /> Temas
               </button>
               <button 
                 onClick={() => setSettingsActiveTab('audio')}
-                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${
                   settingsActiveTab === 'audio' 
                     ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                🔊 Audio
+                <Volume2 size={14} /> Audio
               </button>
               <button 
                 onClick={() => setSettingsActiveTab('institution')}
-                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${
                   settingsActiveTab === 'institution' 
                     ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                🏛️ Inst.
+                <Building2 size={14} /> Inst.
               </button>
             </div>
 
@@ -2392,9 +2392,9 @@ const App: React.FC = () => {
                             {localNotificationsEnabled && (
                               <button 
                                 onClick={handleSendTestNotification}
-                                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-indigo-200/50 dark:border-indigo-800/50"
+                                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-indigo-200/50 dark:border-indigo-800/50 flex items-center justify-center gap-1.5"
                               >
-                                🔔 Enviar Alerta de Prueba a la Barra de Estado
+                                <Bell size={14} /> Enviar Alerta de Prueba a la Barra de Estado
                               </button>
                             )}
                           </div>
