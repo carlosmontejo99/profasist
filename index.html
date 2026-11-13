@@ -160,7 +160,7 @@
       }
     </script>
     <script>
-      // Splash: 500 ms después de load, con fallback de 4 s si algo falla.
+      // Splash: 1500 ms después de load (3x la duración original), con fallback de 4 s.
       (function () {
         var splash = document.getElementById('profasist-splash');
         if (!splash) return;
@@ -174,7 +174,7 @@
           }, 480);
         }
         function schedule() {
-          window.setTimeout(hide, 500);
+          window.setTimeout(hide, 1500);
         }
         if (document.readyState === 'complete') schedule();
         else window.addEventListener('load', schedule, { once: true });

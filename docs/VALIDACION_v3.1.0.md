@@ -95,6 +95,7 @@ Artefactos:
 | Verificación | Resultado |
 |---|---|
 | Splash presente tras recargar | Sí |
+| Duración visible | 1.5 s (3× la original) |
 | Logotipo cargado | 92 × 92 px |
 | Fade-out | 450 ms |
 | Fallback | 4 s |

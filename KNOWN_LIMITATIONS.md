@@ -63,6 +63,6 @@ Para garantizar total honestidad y claridad en la distribución entre docentes, 
 ---
 
 ## 7. Splash y contraste visual
-- **Splash**: visible ~500 ms tras `load`, con fallback de 4 s y fade-out; respeta `prefers-reduced-motion`.
+- **Splash**: visible ~1.5 s tras `load`, con fallback de 4 s y fade-out; respeta `prefers-reduced-motion`.
 - **Contraste**: se elevaron los textos atenuados a slate-600 en claro y slate-300 en oscuro. Los temas Solarized/Emerald/Nord conservan sus paletas específicas.
 - **Iconografía**: las pestañas de Ajustes y las cabeceras usan iconos SVG de `lucide-react`; los emojis que quedan en nombres de materias son datos del usuario, no iconos de navegación.

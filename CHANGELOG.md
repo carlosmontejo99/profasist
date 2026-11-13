@@ -23,7 +23,7 @@
 - Build Android **agent** con el mismo `applicationId`, WebView debugging aislado y release normal sin CDP.
 
 ### Interfaz
-- Splash screen animada de ~500 ms con fade-out y respeto a `prefers-reduced-motion`.
+- Splash screen animada de ~1.5 s con fade-out y respeto a `prefers-reduced-motion`.
 - Iconografía SVG consistente en pestañas de Ajustes y cabeceras; retiro de emojis de navegación.
 - Contraste reforzado para lectura en laboratorio (slate-600/300) y foco visible en controles.
 
