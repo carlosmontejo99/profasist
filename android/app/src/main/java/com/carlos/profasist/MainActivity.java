@@ -26,7 +26,18 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(android.os.Bundle savedInstanceState) {
+        // Only the dedicated "agent" build type exposes the WebView DevTools
+        // socket. The normal release build keeps WebView debugging disabled.
+        if (BuildConfig.AGENT_BRIDGE) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+
         super.onCreate(savedInstanceState);
+        if (BuildConfig.AGENT_BRIDGE) {
+            // Capacitor sets debugging from isDebug during super.onCreate; the
+            // agent build is a release-type build, so re-enable it afterwards.
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 100);
@@ -52,6 +63,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        if (BuildConfig.AGENT_BRIDGE) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         if (!configured) {
             configured = true;
             WebView wv = getBridge().getWebView();

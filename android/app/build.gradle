@@ -15,6 +15,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 301
         versionName "3.0.1"
+        buildConfigField "boolean", "AGENT_BRIDGE", "false"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -32,11 +33,28 @@ android {
             }
         }
     }
+    buildFeatures {
+        buildConfig true
+    }
     buildTypes {
         release {
             minifyEnabled false
+            buildConfigField "boolean", "AGENT_BRIDGE", "false"
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        agent {
+            initWith release
+            matchingFallbacks = ['release']
+            // CDP bridge is only exposed by this build type. It uses the same
+            // applicationId so it replaces the normal app and keeps its data.
+            buildConfigField "boolean", "AGENT_BRIDGE", "true"
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
             }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

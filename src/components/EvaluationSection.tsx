@@ -14,6 +14,7 @@ import {
   resolveGradingPolicy,
 } from '../../services/grading';
 import { exportInstitutionalWorkbook } from '../../services/institutionalExport';
+import { DeliveryAuditPanel } from './DeliveryAuditPanel';
 
 interface EvaluationSectionProps {
   group: Group;
@@ -64,6 +65,7 @@ const getPrepopulatedGrades = (students: Student[]): Record<string, Record<strin
 
 export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onSaveGroup, onNotification }) => {
   const [activeTab, setActiveTab] = useState<'p1' | 'p2' | 'p3' | 'final'>('p1');
+  const [evaluationView, setEvaluationView] = useState<'grades' | 'deliveries'>('grades');
   const [evaluations, setEvaluations] = useState<GroupEvaluations>(() => {
     return group.evaluations || getInitialEvaluations(group.students || []);
   });
@@ -703,12 +705,49 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
         </button>
       </div>
 
+      {/* GRADES / DELIVERY AUDIT SWITCH */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+          <button
+            onClick={() => setEvaluationView('grades')}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition ${
+              evaluationView === 'grades'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            Calificaciones
+          </button>
+          <button
+            onClick={() => setEvaluationView('deliveries')}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition ${
+              evaluationView === 'deliveries'
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            Entregas
+          </button>
+        </div>
+        {evaluationView === 'deliveries' && (
+          <p className="text-[10px] text-slate-400 font-medium hidden sm:block">
+            Auditoría multicanal · Teams, Outlook, WhatsApp y presencial
+          </p>
+        )}
+      </div>
+
       {/* STUDENT LENGTH CHECK */}
       {group.students.length === 0 ? (
         <div className="p-8 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 text-center shadow-sm">
           <p className="text-slate-500 text-sm font-bold">No hay alumnos inscritos en esta materia.</p>
           <p className="text-xs text-slate-400 mt-1">Registra alumnos en la sección de Alumnos antes de evaluar.</p>
         </div>
+      ) : evaluationView === 'deliveries' ? (
+        <DeliveryAuditPanel
+          group={calcGroup}
+          onSaveGroup={onSaveGroup}
+          onNotification={onNotification}
+        />
       ) : activeTab === 'final' ? (
         
         /* PROMEDIO FINAL SUMMARY TAB */

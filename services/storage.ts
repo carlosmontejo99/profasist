@@ -1,6 +1,7 @@
 
-import { AppData, Group, Student, Session, AttendanceRecord, AppSettings, BackupFile, ViewState, AudioRecording, InstitutionProfile } from '../types';
+import { AppData, Group, Student, Session, AttendanceRecord, AppSettings, BackupFile, ViewState, AudioRecording, InstitutionProfile, DeliveryRecord, AuditLogEntry } from '../types';
 import { buildInstitutionProfile } from './institution';
+import { scheduleAutoSnapshot } from './snapshotDb';
 
 const STORAGE_KEY = 'profasist_v1_data';
 const UI_STATE_KEY = 'profasist_v1_ui_state';
@@ -189,6 +190,13 @@ export const loadData = (): AppData => {
   }
 };
 
+/** Replace the whole local state after a validated snapshot restore. */
+export const replaceData = (input: unknown): void => {
+  const { data } = migrateData(input);
+  saveData(data);
+  scheduleAutoSnapshot(data, 'restore');
+};
+
 const saveData = (data: AppData): void => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -362,12 +370,14 @@ export const saveGroup = (group: Group): void => {
     data.groups.push(group);
   }
   saveData(data);
+  scheduleAutoSnapshot(data, 'group');
 };
 
 export const deleteGroup = (groupId: string): void => {
   const data = loadData();
   data.groups = data.groups.filter(g => g.id !== groupId);
   saveData(data);
+  scheduleAutoSnapshot(data, 'delete-group');
 };
 
 export const getGroupsBySemester = (semester: string): Group[] => {
@@ -465,4 +475,67 @@ export const addSessionRecording = (
     
     session.recordings.push(recording);
     saveData(data);
+};
+
+// --- DELIVERY AUDIT & AUDIT LOG (v2) ---
+
+export const getDeliveries = (groupId?: string): DeliveryRecord[] => {
+  const data = loadData();
+  const deliveries = Array.isArray(data.deliveries) ? data.deliveries : [];
+  return groupId
+    ? deliveries.filter((record) => record.groupId === groupId)
+    : deliveries;
+};
+
+export const saveDelivery = (record: DeliveryRecord): void => {
+  const data = loadData();
+  const deliveries = Array.isArray(data.deliveries) ? data.deliveries : [];
+  const index = deliveries.findIndex((item) => item.id === record.id);
+  if (index >= 0) {
+    deliveries[index] = record;
+  } else {
+    deliveries.push(record);
+  }
+  data.deliveries = deliveries;
+  saveData(data);
+  scheduleAutoSnapshot(data, 'delivery');
+};
+
+export const saveDeliveries = (records: DeliveryRecord[]): void => {
+  const data = loadData();
+  const current = Array.isArray(data.deliveries) ? data.deliveries : [];
+  const byId = new Map(current.map((record) => [record.id, record]));
+  records.forEach((record) => byId.set(record.id, record));
+  data.deliveries = Array.from(byId.values());
+  saveData(data);
+  scheduleAutoSnapshot(data, 'delivery-import');
+};
+
+export const deleteDelivery = (deliveryId: string): void => {
+  const data = loadData();
+  data.deliveries = (data.deliveries || []).filter(
+    (record) => record.id !== deliveryId,
+  );
+  saveData(data);
+  scheduleAutoSnapshot(data, 'delivery-delete');
+};
+
+export const getAuditLog = (): AuditLogEntry[] => {
+  const data = loadData();
+  return Array.isArray(data.auditLog) ? data.auditLog : [];
+};
+
+export const appendAuditLog = (entry: AuditLogEntry): void => {
+  const data = loadData();
+  const log = Array.isArray(data.auditLog) ? data.auditLog : [];
+  data.auditLog = [entry, ...log].slice(0, 500);
+  saveData(data);
+};
+
+export const appendAuditLogs = (entries: AuditLogEntry[]): void => {
+  if (entries.length === 0) return;
+  const data = loadData();
+  const log = Array.isArray(data.auditLog) ? data.auditLog : [];
+  data.auditLog = [...entries, ...log].slice(0, 500);
+  saveData(data);
 };

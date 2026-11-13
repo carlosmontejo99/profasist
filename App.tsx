@@ -27,6 +27,7 @@ import { NotificationServ } from './services/notificationService';
 import { StudentRandomizerModal } from './src/components/StudentRandomizerModal';
 import { ClassroomTimerModal } from './src/components/ClassroomTimerModal';
 import { InstitutionSettings } from './src/components/InstitutionSettings';
+import { AgentBridgePanel } from './src/components/AgentBridgePanel';
 import { updateGroupReporting } from './services/institution';
 import { exportSemesterWorkbooks } from './services/institutionalExport';
 
@@ -2327,6 +2328,12 @@ const App: React.FC = () => {
                       )}
                     </div>
                   </details>
+
+                  <AgentBridgePanel
+                    data={data}
+                    onRefresh={refresh}
+                    onNotification={setNotification}
+                  />
                 </div>
               )}
 

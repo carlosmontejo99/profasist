@@ -1,0 +1,13 @@
+{
+	"appId": "com.carlos.profasist",
+	"appName": "ProfAsist",
+	"webDir": "dist",
+	"server": {
+		"allowNavigation": [
+			"*.google.com"
+		]
+	},
+	"android": {
+		"webContentsDebuggingEnabled": true
+	}
+}
