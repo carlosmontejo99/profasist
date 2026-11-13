@@ -6,10 +6,11 @@ import {
   Download, Calendar, ChevronRight, CheckCircle2, ChevronDown, Sliders
 } from 'lucide-react';
 import { Group, ClosureConfig, GradingPolicy } from '../../types';
-import * as Utils from '../../services/utils';
+import * as Storage from '../../services/storage';
 import { AudioHaptics } from '../../services/audioHaptics';
 import { calculateParcialScore, calculateFinalScore, formatGrade } from '../../services/grading';
-import * as XLSX from 'xlsx';
+import { resolveInstitutionProfile, resolveReportMetadata } from '../../services/institution';
+import { exportInstitutionalWorkbook } from '../../services/institutionalExport';
 
 export type { ClosureConfig } from '../../types';
 
@@ -52,6 +53,7 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
   const [activeTab, setActiveTab] = useState<'parcial' | 'semestral' | 'acta' | 'config'>('semestral');
   const [selectedParcial, setSelectedParcial] = useState<'p1' | 'p2' | 'p3'>('p1');
   const [isPrintPreview, setIsPrintPreview] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Load configuration or set defaults
   const [config, setConfig] = useState<ClosureConfig>({
@@ -68,20 +70,33 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
 
   // Extract settings on group load
   useEffect(() => {
+    const settings = Storage.loadData().settings;
+    const profile = resolveInstitutionProfile(settings);
+    const metadata = resolveReportMetadata(group, settings);
+    const institutionLine = [profile.university, profile.institute]
+      .map(value => (value || '').trim())
+      .filter(Boolean)
+      .join(' · ');
+
     // Check if group has a saved closure config
     const savedConfig = group.closureConfig;
     if (savedConfig) {
-      setConfig(savedConfig);
-    } else {
-      // Default teacher name from global settings if available
-      const teacherName = localStorage.getItem('profasist_v1_data') 
-        ? JSON.parse(localStorage.getItem('profasist_v1_data')!).settings?.teacherName 
-        : '';
-      
       setConfig(prev => ({
         ...prev,
+        ...savedConfig,
+        // Institutional metadata is global (or per-group reporting override);
+        // the closure config keeps only the calculation rules.
+        universityName: institutionLine || savedConfig.universityName,
+        teacherName: metadata.professorName || savedConfig.teacherName || '',
+        minPass: savedConfig.minPass ?? 7.0,
+      }));
+    } else {
+      setConfig(prev => ({
+        ...prev,
+        universityName: institutionLine || prev.universityName,
         attendanceMinRate: attendanceThreshold,
-        teacherName: teacherName || ''
+        teacherName: metadata.professorName || profile.professor || '',
+        minPass: prev.minPass ?? 7.0,
       }));
     }
   }, [group, attendanceThreshold]);
@@ -134,98 +149,20 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
     };
   };
 
-  // EXPORT TO EXCEL NATIVE FUNCTION WITH STYLING AND FREEZE PANES
-  const handleExportXLSX = () => {
-    const workbook = XLSX.utils.book_new();
-    
-    // Prepare metadata block
-    const titleBlock = [
-      [config.universityName.toUpperCase()],
-      ["ACTA DE EVALUACIÓN SEMESTRAL - CIERRE ACADÉMICO"],
-      [],
-      ["MATERIA:", group.name.toUpperCase(), "PROFESOR:", (config.teacherName || "S/D").toUpperCase()],
-      ["SEMESTRE:", group.semester, "FECHA:", new Date().toLocaleDateString('es-MX')],
-      ["FÓRMULA:", config.formulaType === 'simple' ? "PROMEDIO SIMPLE (P1+P2+P3)/3" : `PROMEDIO PONDERADO (${config.weights.p1}% / ${config.weights.p2}% / ${config.weights.p3}%)`, "REGLA DE REDONDEO:", config.roundingRule.toUpperCase()],
-      []
-    ];
-
-    // Table Headers
-    const headers = [
-      "Matrícula", 
-      "Nombre Completo", 
-      "Parcial 1", 
-      "Parcial 2", 
-      "Parcial 3", 
-      "Final (Num)", 
-      "Final (Letra)", 
-      "Asistencia %", 
-      "Estatus"
-    ];
-
-    // Compile rows
-    const dataRows = group.students.map(student => {
-      const summary = getStudentFinalScore(student.id);
-      return [
-        student.rollNumber || 'S/M',
-        student.name,
-        summary.p1 === null ? '' : Number(summary.p1.toFixed(1)),
-        summary.p2 === null ? '' : Number(summary.p2.toFixed(1)),
-        summary.p3 === null ? '' : Number(summary.p3.toFixed(1)),
-        summary.finalGrade === null ? '' : Number(summary.finalGrade.toFixed(1)),
-        numberToSpanishWords(summary.finalGrade, summary.status),
-        `${summary.attendancePercentage}%`,
-        summary.status
-      ];
-    });
-
-    // Summary Statistics
-    const approvedCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Acreditado').length;
-    const reprobadosCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'No Acreditado').length;
-    const sdCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Sin derecho').length;
-    const pendienteCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Pendiente').length;
-    const totalStudents = group.students.length;
-    const approvedRate = totalStudents > 0 ? ((approvedCount / totalStudents) * 100).toFixed(1) : '0';
-
-    const footerRows = [
-      [],
-      ["ESTADÍSTICAS DEL GRUPO"],
-      ["Alumnos Registrados:", totalStudents, "Acreditados:", approvedCount],
-      ["No Acreditados:", reprobadosCount, "Sin Derecho (S/D):", sdCount],
-      ["Pendientes:", pendienteCount, "Porcentaje de Acreditación:", `${approvedRate}%`]
-    ];
-
-    // Build worksheet with All Data
-    const sheetContent = [...titleBlock, headers, ...dataRows, ...footerRows];
-    const ws = XLSX.utils.aoa_to_sheet(sheetContent);
-
-    // Set dynamic column widths
-    const maxNameLen = Math.max(32, ...(group.students || []).map(s => (s.name || '').length + 3));
-    ws['!cols'] = [
-      { wch: 15 }, // Matrícula
-      { wch: maxNameLen }, // Nombre
-      { wch: 14 }, // P1
-      { wch: 14 }, // P2
-      { wch: 14 }, // P3
-      { wch: 16 }, // Final (Num)
-      { wch: 28 }, // Final (Letra)
-      { wch: 15 }, // Asistencia
-      { wch: 16 }  // Estatus
-    ];
-
-    // FREEZE PANES!
-    // Row 8 is where student data begins (indices are 0-based, so row 8 = index 7, and we freeze cols A & B which is split index 2)
-    ws['!views'] = [
-      { state: 'frozen', xSplit: 2, ySplit: 7, topLeftCell: 'C8', activePane: 'bottomRight' }
-    ];
-
-    XLSX.utils.book_append_sheet(workbook, ws, "Acta de Cierre");
-    
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const sanitizedName = group.name.replace(/[^a-zA-Z0-9]/g, '_');
-    Utils.triggerDownload(`Acta_Final_${sanitizedName}_${group.semester}.xlsx`, blob);
-    AudioHaptics.playSuccess();
-    onNotification('Se ha generado el archivo XLSX nativo con congelación de paneles.');
+  // Institutional XLSX export: one workbook with the four official sheets.
+  const handleExportXLSX = async () => {
+    setIsExporting(true);
+    try {
+      const settings = Storage.loadData().settings;
+      await exportInstitutionalWorkbook(group, settings);
+      AudioHaptics.playSuccess();
+      onNotification('Acta oficial de 4 pestañas generada: Resumen Semestral + P1 + P2 + P3.');
+    } catch (error) {
+      console.error('No se pudo generar el acta institucional', error);
+      onNotification('No se pudo generar el acta. Revisa el almacenamiento del dispositivo.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const triggerSystemPrint = () => {
@@ -361,9 +298,10 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
 
           <button 
             onClick={handleExportXLSX}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 active:scale-[0.98]"
+            disabled={isExporting}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 active:scale-[0.98]"
           >
-            <FileSpreadsheet size={15} /> Exportar XLSX
+            <FileSpreadsheet size={15} /> {isExporting ? 'Generando...' : 'Exportar Acta Oficial'}
           </button>
         </div>
       </div>

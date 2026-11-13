@@ -1,4 +1,4 @@
-# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.0.1
+# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.1.0
 
 ## Estado de distribución
 
@@ -32,6 +32,14 @@ Para garantizar total honestidad y claridad en la distribución entre docentes, 
 ---
 
 ## 3. Compatibilidad con Microsoft Excel Desktop vs Hojas Libres
-- **Estado**: Validación estructural realizada.
-- **Explicación**: Los archivos `.xlsx` generados por ProfAsist utilizan el estándar oficial OpenXML SpreadsheetML de la librería `SheetJS/xlsx`. Se validó su integridad interna comprobando que la compresión ZIP/XML no posea ningún error (`unzip -t` limpio).
-- **Aviso**: El equipo de desarrollo no cuenta con Microsoft Excel comercial instalado en el servidor de pruebas Linux; el archivo fue validado mediante visores de hojas de cálculo y utilidades de línea de comandos.
+- **Estado**: Validación estructural y de recálculo realizada con LibreOffice.
+- **Explicación**: Las actas institucionales usan `ExcelJS` para escribir fórmulas nativas, estilos, paneles congelados y `fullCalcOnLoad`. El archivo se validó con `openpyxl` y se recalculó con LibreOffice Calc.
+- **Aviso**: El equipo de desarrollo no cuenta con Microsoft Excel comercial instalado en el servidor de pruebas Linux. Se recomienda abrir una muestra en Excel antes de una distribución masiva.
+
+---
+
+## 4. Regla de redondeo institucional
+- **Estado**: Documentada y determinista.
+- **Regla**: ProfAsist v3.1 redondea a 1 decimal con **half-up** (`6.95 → 7.0`, `9.95 → 10.0`). La app y las fórmulas `ROUND(...,1)` del XLSX usan la misma regla.
+- **Diferencia histórica**: Las actas 2026-B se generaron con el redondeo binario de Python. En fronteras exactas `.x5` pueden existir diferencias de **0.1** (`9.95 → 9.9` en el acta histórica vs `10.0` en la app). Los promedios finales afectados son casos aislados; el desglose oficial se conserva en los archivos del vault.
+- **Resolución docente**: Los casos ajustados manualmente (por ejemplo, bitácoras validadas) se representan con `finalOverrides`, que conserva el motivo, la fecha y el actor.

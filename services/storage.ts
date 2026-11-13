@@ -1,5 +1,6 @@
 
 import { AppData, Group, Student, Session, AttendanceRecord, AppSettings, BackupFile, ViewState, AudioRecording, InstitutionProfile } from '../types';
+import { buildInstitutionProfile } from './institution';
 
 const STORAGE_KEY = 'profasist_v1_data';
 const UI_STATE_KEY = 'profasist_v1_ui_state';
@@ -85,18 +86,8 @@ export const getDemoGroup = (): Group => {
   };
 };
 
-export const buildDefaultInstitution = (settings: AppSettings = {}): InstitutionProfile => ({
-  university: settings.institution?.university || '',
-  institute: settings.institution?.institute || '',
-  laboratoryPrefix: settings.institution?.laboratoryPrefix || 'Laboratorio de',
-  professor: settings.institution?.professor || settings.teacherName || '',
-  semesterDefault:
-    settings.institution?.semesterDefault ||
-    settings.currentSemester ||
-    defaultSemester,
-  email: settings.institution?.email,
-  logoDataUrl: settings.institution?.logoDataUrl,
-});
+export const buildDefaultInstitution = (settings: AppSettings = {}): InstitutionProfile =>
+  buildInstitutionProfile(settings);
 
 const initialData: AppData = {
   version: APP_DATA_VERSION,

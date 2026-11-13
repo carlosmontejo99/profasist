@@ -26,6 +26,9 @@ import { AudioHaptics } from './services/audioHaptics';
 import { NotificationServ } from './services/notificationService';
 import { StudentRandomizerModal } from './src/components/StudentRandomizerModal';
 import { ClassroomTimerModal } from './src/components/ClassroomTimerModal';
+import { InstitutionSettings } from './src/components/InstitutionSettings';
+import { updateGroupReporting } from './services/institution';
+import { exportSemesterWorkbooks } from './services/institutionalExport';
 
 const PRESET_COLORS = [
   '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', 
@@ -541,7 +544,8 @@ const App: React.FC = () => {
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
   const [isGDriveSettingsOpen, setIsGDriveSettingsOpen] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'notifications' | 'theme' | 'audio'>('backup');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'notifications' | 'theme' | 'audio' | 'institution'>('backup');
+  const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<AppTheme>('light');
   const [isRandomizerOpen, setIsRandomizerOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
@@ -2125,7 +2129,7 @@ const App: React.FC = () => {
             </div>
 
             {/* TAB SELECTOR */}
-            <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6 shrink-0">
+            <div className="grid grid-cols-5 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6 shrink-0">
               <button 
                 onClick={() => setSettingsActiveTab('backup')}
                 className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
@@ -2165,6 +2169,16 @@ const App: React.FC = () => {
                 }`}
               >
                 🔊 Audio
+              </button>
+              <button 
+                onClick={() => setSettingsActiveTab('institution')}
+                className={`py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition ${
+                  settingsActiveTab === 'institution' 
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                🏛️ Inst.
               </button>
             </div>
 
@@ -2721,6 +2735,45 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              )}
+              {settingsActiveTab === 'institution' && (
+                <InstitutionSettings
+                  settings={data.settings}
+                  groups={data.groups}
+                  onSaveProfile={(profile) => {
+                    Storage.updateSettings({ institution: profile });
+                    refresh();
+                  }}
+                  onSaveReporting={(group, reporting) => {
+                    Storage.saveGroup(updateGroupReporting(group, reporting));
+                    refresh();
+                  }}
+                  onExportBatch={async (groups) => {
+                    setIsBatchExporting(true);
+                    try {
+                      const result = await exportSemesterWorkbooks(
+                        groups,
+                        Storage.loadData().settings,
+                      );
+                      if (result.failed.length === 0) {
+                        setNotification(
+                          `${result.exported.length} acta${result.exported.length === 1 ? '' : 's'} institucional${result.exported.length === 1 ? '' : 'es'} generada${result.exported.length === 1 ? '' : 's'}.`,
+                        );
+                      } else {
+                        setNotification(
+                          `${result.exported.length} actas generadas. Fallaron: ${result.failed.map((item) => item.group).join(', ')}.`,
+                        );
+                      }
+                    } catch (error) {
+                      console.error('Error en la exportación por lote', error);
+                      setNotification('No se pudieron generar las actas del semestre.');
+                    } finally {
+                      setIsBatchExporting(false);
+                    }
+                  }}
+                  isExporting={isBatchExporting}
+                  onNotification={setNotification}
+                />
               )}
             </div>
 

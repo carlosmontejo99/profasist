@@ -82,12 +82,12 @@ describe('Storage migration v1 -> v2', () => {
     assert.strictEqual(data.version, APP_DATA_VERSION);
   });
 
-  it('builds a generic institution profile without hardcoded personal data', () => {
+  it('seeds the official UACJ profile while keeping every field editable', () => {
     const profile = buildDefaultInstitution({ currentSemester: '2026-B' });
-    assert.strictEqual(profile.university, '');
-    assert.strictEqual(profile.institute, '');
+    assert.strictEqual(profile.university, 'UNIVERSIDAD AUTÓNOMA DE CIUDAD JUÁREZ');
+    assert.strictEqual(profile.institute, 'DCQB');
     assert.strictEqual(profile.laboratoryPrefix, 'Laboratorio de');
-    assert.strictEqual(profile.professor, '');
+    assert.strictEqual(profile.professor, 'Carlos Montejo Dávila');
     assert.strictEqual(profile.semesterDefault, '2026-B');
   });
 });

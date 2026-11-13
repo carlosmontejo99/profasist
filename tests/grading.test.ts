@@ -93,6 +93,9 @@ describe('Grading engine — determinism and missing-data policy', () => {
     assert.strictEqual(roundGrade(6.94), 6.9);
     assert.strictEqual(roundGrade(6.949999999), 6.9);
     assert.strictEqual(roundGrade(9.466666, 'round'), 9.5);
+    // Explicit half-up policy: 8.95 and 9.95 round away from zero.
+    assert.strictEqual(roundGrade(8.95), 9.0);
+    assert.strictEqual(roundGrade(9.95), 10.0);
   });
 
   it('applies floor, ceil and mexican rounding rules', () => {

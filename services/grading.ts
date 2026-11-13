@@ -45,7 +45,14 @@ export const DEFAULT_POLICY: GradingPolicy = {
 const DECIMAL_FACTOR = 10 ** GRADE_DECIMALS;
 
 /**
- * Deterministic rounding to one decimal.
+ * Deterministic rounding to one decimal (half-up).
+ *
+ * The official 2026-B actas were generated with Python's binary float
+ * rounding, which can differ by 0.1 at exact .x5 boundaries (e.g. 9.95 -> 9.9
+ * in Python vs 10.0 here). ProfAsist uses an explicit half-up rule so the app
+ * and the live Excel formulas always agree. The historical difference is
+ * documented in KNOWN_LIMITATIONS.md.
+ *
  * 'mexican' follows the UACJ-style integer rule used by the closure screen:
  * below 6.0 it floors, from 6.0 it goes to the nearest integer.
  */
@@ -329,29 +336,29 @@ export const calculateFinalScore = (
     if (!attendanceEligible) {
       status = 'Sin derecho';
       reason = `Asistencia ${attendancePercentage}% < ${policy.attendanceGate.minRate}%`;
-      // Institutional convention: no right is reported with a failing grade.
-      final = Math.min(final, 5.0);
+      // Institutional convention: no right is reported with 5.0.
+      final = 5.0;
     } else if (
       group.closureConfig?.failIfAnyParcialFailed &&
       (p1 as number) < policy.minPass
     ) {
       status = 'No Acreditado';
       reason = 'Parcial 1 por debajo de la calificación mínima';
-      final = Math.min(final, 5.0);
+      final = 5.0;
     } else if (
       group.closureConfig?.failIfAnyParcialFailed &&
       (p2 as number) < policy.minPass
     ) {
       status = 'No Acreditado';
       reason = 'Parcial 2 por debajo de la calificación mínima';
-      final = Math.min(final, 5.0);
+      final = 5.0;
     } else if (
       group.closureConfig?.failIfAnyParcialFailed &&
       (p3 as number) < policy.minPass
     ) {
       status = 'No Acreditado';
       reason = 'Parcial 3 por debajo de la calificación mínima';
-      final = Math.min(final, 5.0);
+      final = 5.0;
     }
   } else {
     warnings.push('Calificación final pendiente: falta al menos un parcial completo');

@@ -6,14 +6,14 @@ import {
   Printer, Shuffle, Clock
 } from 'lucide-react';
 import { Group, Student, GroupEvaluations, ParcialEvaluation, EvaluationCategory, Activity } from '../../types';
-import * as Utils from '../../services/utils';
+import * as Storage from '../../services/storage';
 import {
   calculateCategoryScore,
   calculateParcialScore,
   calculateFinalScore,
   resolveGradingPolicy,
 } from '../../services/grading';
-import * as XLSX from 'xlsx';
+import { exportInstitutionalWorkbook } from '../../services/institutionalExport';
 
 interface EvaluationSectionProps {
   group: Group;
@@ -68,6 +68,7 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
     return group.evaluations || getInitialEvaluations(group.students || []);
   });
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   
   // Modals / Editors state
   const [editingCategory, setEditingCategory] = useState<EvaluationCategory | null>(null);
@@ -601,125 +602,18 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
     );
   };
 
-  // Native XLSX Excel Export
-  const handleExportToExcel = () => {
-    const workbook = XLSX.utils.book_new();
-    const sanitizedGroupName = group.name.replace(/[^a-zA-Z0-9]/g, '_');
-    
-    if (activeTab === 'final') {
-      // Export Final Summary Worksheet
-      const titleRows = [
-        ["PROFASIST - REGISTRO DE EVALUACIÓN ACADÉMICA SEMESTRAL"],
-        [`Materia: ${group.name}`, `Semestre: ${group.semester}`, `Fecha de Generación: ${new Date().toLocaleDateString()}`],
-        []
-      ];
-      const headers = ["Matrícula", "Alumno", "Parcial 1", "Parcial 2", "Parcial 3", "Promedio Final"];
-      const dataRows = (group.students || []).map(student => {
-        const score = getStudentFinalScore(student.id);
-        const p1 = score.p1 === null ? '—' : Number(score.p1.toFixed(1));
-        const p2 = score.p2 === null ? '—' : Number(score.p2.toFixed(1));
-        const p3 = score.p3 === null ? '—' : Number(score.p3.toFixed(1));
-        const finalAvg = score.final === null ? 'Pendiente' : Number(score.final.toFixed(1));
-
-        return [
-          student.rollNumber || 'S/M',
-          student.name,
-          p1,
-          p2,
-          p3,
-          finalAvg
-        ];
-      });
-
-      const ws = XLSX.utils.aoa_to_sheet([...titleRows, headers, ...dataRows]);
-      
-      const maxNameLen = Math.max(32, ...(group.students || []).map(s => (s.name || '').length + 3));
-      ws['!cols'] = [
-        { wch: 15 }, // Matrícula
-        { wch: maxNameLen }, // Alumno
-        { wch: 14 }, // P1
-        { wch: 14 }, // P2
-        { wch: 14 }, // P3
-        { wch: 18 }  // Final
-      ];
-
-      // Freeze top 4 header rows & student name columns
-      ws['!views'] = [
-        { state: 'frozen', xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight' }
-      ];
-
-      XLSX.utils.book_append_sheet(workbook, ws, "Calificaciones Finales");
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      Utils.triggerDownload(`Calificaciones_Finales_${sanitizedGroupName}.xlsx`, blob);
-      onNotification("Hoja de Excel (.xlsx) de Calificaciones Finales exportada.");
-    } else {
-      // Export Selected Parcial Sheet
-      const pIndex = activeTab === 'p1' ? 1 : activeTab === 'p2' ? 2 : 3;
-      const titleRows = [
-        [`PROFASIST - EVALUACIÓN PARCIAL ${pIndex}`],
-        [`Materia: ${group.name}`, `Semestre: ${group.semester}`, `Fecha: ${new Date().toLocaleDateString('es-MX')}`],
-        []
-      ];
-
-      // Header Row 1: Categories & weights
-      // Header Row 2: Sub-activities & averages
-      const rowCategories: string[] = ["Matrícula", "Alumno"];
-      const rowActivities: string[] = ["", ""];
-      const maxNameLen = Math.max(32, ...(group.students || []).map(s => (s.name || '').length + 3));
-      const colWidths: { wch: number }[] = [{ wch: 15 }, { wch: maxNameLen }];
-
-      currentParcial.categories.forEach(cat => {
-        cat.activities.forEach(act => {
-          rowCategories.push(`${cat.name} (${cat.weight}%)`);
-          rowActivities.push(act.name);
-          colWidths.push({ wch: Math.max(14, act.name.length + 4) });
-        });
-        rowCategories.push(`${cat.name} (${cat.weight}%)`);
-        rowActivities.push(`Promedio ${cat.name}`);
-        colWidths.push({ wch: 18 });
-      });
-
-      rowCategories.push("CALIFICACIÓN PARCIAL");
-      rowActivities.push("Calificación Final Parcial");
-      colWidths.push({ wch: 24 });
-
-      const dataRows = (group.students || []).map(student => {
-        const row: (string | number)[] = [
-          student.rollNumber || 'S/M',
-          student.name
-        ];
-
-        currentParcial.categories.forEach(cat => {
-          cat.activities.forEach(act => {
-            const grade = currentParcial.grades[student.id]?.[act.id];
-            row.push(grade !== undefined ? Number(grade.toFixed(1)) : '—');
-          });
-          const catAvg = calculateStudentCategoryAverage(student.id, cat, currentParcial.grades);
-          const hasCatGrades = hasCategoryGrades(student.id, cat, currentParcial.grades);
-          row.push(hasCatGrades ? Number(catAvg.toFixed(1)) : '—');
-        });
-
-        const parcialGrade = calculateStudentParcialGrade(student.id, currentParcial);
-        const hasParcialGrades = hasStudentGrades(student.id, currentParcial);
-        row.push(hasParcialGrades ? Number(parcialGrade.toFixed(1)) : '—');
-        return row;
-      });
-
-      const sheetContent = [...titleRows, rowCategories, rowActivities, ...dataRows];
-      const ws = XLSX.utils.aoa_to_sheet(sheetContent);
-      ws['!cols'] = colWidths;
-
-      // Freeze top 5 header rows & student name columns
-      ws['!views'] = [
-        { state: 'frozen', xSplit: 2, ySplit: 5, topLeftCell: 'C6', activePane: 'bottomRight' }
-      ];
-
-      XLSX.utils.book_append_sheet(workbook, ws, `Parcial ${pIndex}`);
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      Utils.triggerDownload(`Evaluacion_Parcial_${pIndex}_${sanitizedGroupName}.xlsx`, blob);
-      onNotification(`Hoja de Excel (.xlsx) Parcial ${pIndex} exportada.`);
+  // Institutional XLSX export: one workbook with four official sheets.
+  const handleExportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      const settings = Storage.loadData().settings;
+      await exportInstitutionalWorkbook(group, settings);
+      onNotification(`Acta oficial de 4 pestañas generada para ${group.name}.`);
+    } catch (error) {
+      console.error('No se pudo generar el acta institucional', error);
+      onNotification('No se pudo generar el acta. Revisa el almacenamiento del dispositivo.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -746,11 +640,12 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
         <div className="flex flex-wrap items-center gap-2">
           <button 
             onClick={handleExportToExcel}
-            className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-bold rounded-2xl text-xs transition-all active:scale-95 flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/40 shadow-xs"
-            title="Exportar hoja de cálculo Excel (.xlsx)"
+            disabled={isExporting}
+            className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-bold rounded-2xl text-xs transition-all active:scale-95 flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/40 shadow-xs"
+            title="Exportar acta institucional de 4 pestañas (.xlsx)"
           >
             <FileSpreadsheet size={15} />
-            <span>Excel (.xlsx)</span>
+            <span>{isExporting ? 'Generando...' : 'Acta Oficial'}</span>
           </button>
 
           <button 
