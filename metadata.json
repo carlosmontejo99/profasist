@@ -1,6 +1,6 @@
 {
   "name": "ProfAsist",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Offline-first attendance, grading, delivery audit and institutional 4-sheet reports for professors.",
   "requestFramePermissions": [
     "camera",

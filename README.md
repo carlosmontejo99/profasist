@@ -1,7 +1,7 @@
 # ProfAsist
 
 [![Licencia GNU GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/Version-3.1.1-emerald.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Version-3.1.2-emerald.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android-indigo.svg)](https://capacitorjs.com/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21501969.svg)](https://doi.org/10.5281/zenodo.21501969)

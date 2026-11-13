@@ -1,4 +1,4 @@
-# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.1.1
+# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.1.2
 
 ## Estado de distribución
 
@@ -66,3 +66,11 @@ Para garantizar total honestidad y claridad en la distribución entre docentes, 
 - **Splash**: visible ~1.5 s tras `load`, con fallback de 4 s y fade-out; respeta `prefers-reduced-motion`.
 - **Contraste**: se elevaron los textos atenuados a slate-600 en claro y slate-300 en oscuro. Los temas Solarized/Emerald/Nord conservan sus paletas específicas.
 - **Iconografía**: las pestañas de Ajustes y las cabeceras usan iconos SVG de `lucide-react`; los emojis que quedan en nombres de materias son datos del usuario, no iconos de navegación.
+
+---
+
+## 8. Notificaciones y micrófono (v3.1.2)
+- **Android 13+**: `POST_NOTIFICATIONS` se solicita en tiempo de ejecución; si se deniega, el panel de Alertas permite abrir los ajustes de la app.
+- **Alarmas exactas**: `SCHEDULE_EXACT_ALARM` es un acceso especial de Android 12+; el usuario debe concederlo en `Alarmas y recordatorios`. Sin él, Android puede retrasar recordatorios.
+- **Canal**: se usa `profasist_reminders_v2` con el sonido del sistema; el canal heredado `profasist_reminders` queda sin uso.
+- **Micrófono**: si el permiso se deniega, se muestra un modal propio con reintento y acceso a los ajustes; el audio nunca sale del dispositivo.

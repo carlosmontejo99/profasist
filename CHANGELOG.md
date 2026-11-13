@@ -1,5 +1,24 @@
 # Registro de Cambios (Changelog) — ProfAsist
 
+## [v3.1.2] - 2026-11-13
+
+### Permisos y notificaciones
+- `AndroidManifest.xml` declara `POST_NOTIFICATIONS` (Android 13+) y `SCHEDULE_EXACT_ALARM` (Android 12+).
+- El botón de prueba solicita el permiso en tiempo de ejecución y dispara una notificación real; verificado en Poco F5.
+- Nuevo panel de **alarmas exactas** en Ajustes → Alertas, con apertura directa a `Settings$AlarmsAndRemindersAppActivity`.
+- Canal `profasist_reminders` migrado una sola vez para eliminar un `sound` inválido heredado y usar el sonido predeterminado.
+
+### Grabación de audio
+- Permiso de micrófono denegado ahora abre un **modal propio de ProfAsist**, con reintento y acceso a los ajustes de la app.
+- Controles SVG consistentes: `Mic` para iniciar, `Pause`, `Play` para reanudar y `Square` para detener.
+- Indicador activo con cinco barras animadas, pausadas al pausar la grabación.
+- Método nativo `openAppSettings()` en `MainActivity` para el flujo de permisos permanentes.
+
+### Build
+- `versionCode 312` / `versionName 3.1.2`.
+- APK `agent` actualizada e instalada; datos del dispositivo preservados.
+
+
 ## [v3.1.1] - 2026-11-13
 
 - Splash visible **1.5 s** (3× la duración original) antes del fade-out de 450 ms.

@@ -6,7 +6,7 @@ import {
   Moon, Sun, X, Edit2, Trash2, User, AlertCircle, Archive,
   Settings, Palette, Sparkles, Bot, Send, Loader2,
   Copy, Check, MessageSquare, AlertTriangle, Wand2, Info,
-  Mic, Pause, Play, Download, Volume2, Folder, FolderPlus,
+  Mic, Pause, Play, Download, Volume2, Folder, FolderPlus, Square,
   Sliders, UserCheck, TrendingUp, CloudRain, SunDim, BarChart3, Mail, FileAudio,
   Cloud, RefreshCw, CloudUpload, Unlink, Search, Filter, Bell, BellOff, Share2,
   Shield, Fingerprint, Dices, VolumeX, Smartphone, Building2
@@ -509,6 +509,8 @@ const App: React.FC = () => {
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMicPermissionOpen, setIsMicPermissionOpen] = useState(false);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [selectedFolder, setSelectedFolder] = useState('Clases y Lecciones');
   const [selectedFormat, setSelectedFormat] = useState<'mp3' | 'wav' | 'webm'>('mp3');
@@ -611,14 +613,29 @@ const App: React.FC = () => {
   });
 
   const [notificationPermission, setNotificationPermission] = useState<string>('default');
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
+
+  const refreshNotificationStatus = async () => {
+    const status = await NotificationServ.getStatus();
+    setNotificationPermission(status.granted ? 'granted' : 'default');
+    if (status.granted && localNotificationsEnabled) {
+      await NotificationServ.scheduleGroupReminders(data.groups);
+    }
+    if (NotificationServ.isNativePlatform()) {
+      setExactAlarmStatus(await NotificationServ.getExactAlarmStatus());
+    }
+  };
 
   useEffect(() => {
-    NotificationServ.getStatus().then(status => {
-      setNotificationPermission(status.granted ? 'granted' : 'default');
-      if (status.granted && localNotificationsEnabled) {
-        NotificationServ.scheduleGroupReminders(data.groups);
-      }
-    });
+    void refreshNotificationStatus();
+  }, [data.groups, localNotificationsEnabled]);
+
+  useEffect(() => {
+    const updateOnVisible = () => {
+      if (document.visibilityState === 'visible') void refreshNotificationStatus();
+    };
+    document.addEventListener('visibilitychange', updateOnVisible);
+    return () => document.removeEventListener('visibilitychange', updateOnVisible);
   }, [data.groups, localNotificationsEnabled]);
   const notifiedKeysRef = useRef<Set<string>>(new Set());
 
@@ -882,10 +899,30 @@ const App: React.FC = () => {
       setLocalNotificationsEnabled(true);
       localStorage.setItem('local_notifications_enabled', 'true');
       await NotificationServ.scheduleGroupReminders(data.groups);
-      setNotification('¡Notificaciones nativas activadas correctamente! 🔔');
+      setExactAlarmStatus(await NotificationServ.getExactAlarmStatus());
+      setNotification('Notificaciones nativas activadas correctamente.');
     } else {
       setNotificationPermission('denied');
-      setNotification('Permiso denegado. Actívalo en los ajustes de tu sistema/navegador.');
+      setNotification('Permiso denegado. Actívalo desde Ajustes de Android.');
+    }
+  };
+
+  const handleRequestExactAlarm = async () => {
+    await NotificationServ.requestExactAlarmPermission();
+    const status = await NotificationServ.getExactAlarmStatus();
+    setExactAlarmStatus(status);
+    setNotification(
+      status === 'granted'
+        ? 'Alarmas exactas activadas.'
+        : 'Activa las alarmas exactas desde Ajustes de Android.',
+    );
+  };
+
+  const handleOpenAppSettings = () => {
+    if (window.Android?.openAppSettings) {
+      window.Android.openAppSettings();
+    } else {
+      setNotification('Abre los ajustes de la app desde Android para cambiar el permiso.');
     }
   };
 
@@ -907,9 +944,12 @@ const App: React.FC = () => {
     setNotification('Enviando alerta de prueba a tu dispositivo...');
     const success = await NotificationServ.sendTestNotification();
     if (success) {
-      setNotification('¡Alerta de prueba enviada con éxito! 🔔');
+      setNotificationPermission('granted');
+      setExactAlarmStatus(await NotificationServ.getExactAlarmStatus());
+      setNotification('Alerta de prueba enviada. Revisa la barra de estado.');
     } else {
-      setNotification('No se pudo enviar la alerta. Verifica los permisos.');
+      setNotificationPermission('denied');
+      setNotification('No se pudo enviar la alerta. Revisa el permiso de notificaciones.');
     }
   };
 
@@ -1345,30 +1385,57 @@ const App: React.FC = () => {
   // --- LÓGICA DE GRABADORA DE AUDIO ---
   const recordingDurationRef = useRef<number>(0);
 
+  const beginRecording = async () => {
+    await VoiceRecorder.startRecording();
+    recordingDurationRef.current = 0;
+    setRecordingDuration(0);
+    setIsRecording(true);
+    setIsPaused(false);
+    timerIntervalRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
+      recordingDurationRef.current += 1;
+      const next = recordingDurationRef.current;
+      setRecordingDuration(next);
+      if (selectedLimitRef.current > 0 && next >= Math.round(selectedLimitRef.current * 60)) {
+        stopRecording();
+      }
+    }, 1000);
+  };
+
   const startRecording = async () => {
     try {
       const perm = await VoiceRecorder.requestAudioRecordingPermission();
       if (!perm.value) {
-        setNotification('Permiso de microfono denegado. Ve a Ajustes y activalo.');
+        setMicPermissionDenied(false);
+        setIsMicPermissionOpen(true);
         return;
       }
-      await VoiceRecorder.startRecording();
-      recordingDurationRef.current = 0;
-      setRecordingDuration(0);
-      setIsRecording(true);
-      setIsPaused(false);
-      timerIntervalRef.current = setInterval(() => {
-        if (isPausedRef.current) return;
-        recordingDurationRef.current += 1;
-        const next = recordingDurationRef.current;
-        setRecordingDuration(next);
-        if (selectedLimitRef.current > 0 && next >= Math.round(selectedLimitRef.current * 60)) {
-          stopRecording();
-        }
-      }, 1000);
-    } catch (err) {
+      await beginRecording();
+    } catch (err: any) {
       console.error('VoiceRecorder error:', err);
-      setNotification('Error al iniciar grabacion: ' + err);
+      const message = String(err?.message || err || '').toLowerCase();
+      if (message.includes('permission') || message.includes('denied') || message.includes('not allowed')) {
+        setMicPermissionDenied(true);
+        setIsMicPermissionOpen(true);
+      } else {
+        setNotification('No se pudo iniciar la grabación. Revisa el micrófono del dispositivo.');
+      }
+    }
+  };
+
+  const handleRequestMicPermission = async () => {
+    try {
+      const perm = await VoiceRecorder.requestAudioRecordingPermission();
+      if (perm.value) {
+        setMicPermissionDenied(false);
+        setIsMicPermissionOpen(false);
+        await beginRecording();
+      } else {
+        setMicPermissionDenied(true);
+      }
+    } catch (err) {
+      console.error('Error requesting microphone permission:', err);
+      setMicPermissionDenied(true);
     }
   };
 
@@ -2402,6 +2469,53 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {NotificationServ.isNativePlatform() && (
+                    <div className="p-5 bg-slate-50 dark:bg-slate-850 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                          <Clock size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Alarmas exactas de Android</h3>
+                          <p className="text-[10px] uppercase font-black tracking-wider text-slate-400 mt-0.5">Android 12+</p>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+                        Para que los recordatorios se disparen a la hora exacta, Android requiere el acceso especial a alarmas exactas. Sin él, el sistema puede retrasar la alerta.
+                      </p>
+
+                      <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Estado de alarmas exactas</span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md ${
+                            exactAlarmStatus === 'granted'
+                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
+                          }`}>
+                            {exactAlarmStatus === 'granted' ? 'Activo' : exactAlarmStatus === 'denied' ? 'Denegado' : 'Pendiente'}
+                          </span>
+                        </div>
+
+                        {exactAlarmStatus !== 'granted' && (
+                          <button
+                            onClick={handleRequestExactAlarm}
+                            className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2"
+                          >
+                            <Clock size={16} /> Permitir alarmas exactas
+                          </button>
+                        )}
+
+                        <button
+                          onClick={handleOpenAppSettings}
+                          className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                        >
+                          <Settings size={14} /> Abrir ajustes de la app
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {settingsActiveTab === 'theme' && (
@@ -3074,6 +3188,50 @@ const App: React.FC = () => {
 
       {/* Modal de correo simulado eliminado — la comunicación real se hace desde el modal Reenganche Rápido con mailto: y WhatsApp directos */}
 
+      {/* MODAL PROPIO: PERMISO DE MICRÓFONO */}
+      {isMicPermissionOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 shadow-2xl space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center">
+              <Mic size={26} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">Permiso de micrófono</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                ProfAsist necesita el micrófono para grabar notas de clase. El audio se guarda únicamente en tu dispositivo y no se envía a ningún servidor.
+              </p>
+              {micPermissionDenied && (
+                <p className="text-[11px] text-rose-600 dark:text-rose-300 mt-2 leading-relaxed">
+                  El permiso fue denegado. Si Android ya no muestra el diálogo, actívalo desde los ajustes de la app.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={handleRequestMicPermission}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider active:scale-95 transition flex items-center justify-center gap-2"
+              >
+                <Mic size={16} /> Permitir micrófono
+              </button>
+              {micPermissionDenied && (
+                <button
+                  onClick={handleOpenAppSettings}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-wider transition flex items-center justify-center gap-2"
+                >
+                  <Settings size={15} /> Abrir ajustes de la app
+                </button>
+              )}
+              <button
+                onClick={() => setIsMicPermissionOpen(false)}
+                className="w-full py-2.5 bg-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl font-black text-[10px] uppercase tracking-wider transition"
+              >
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- NUEVO DRAWER: GRABADORA DE AUDIO MULTIFUNCIONAL --- */}
       {isRecorderOpen && (
         <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-end p-0 bg-black/60 backdrop-blur-xs">
@@ -3133,6 +3291,25 @@ const App: React.FC = () => {
                   {isRecording ? (isPaused ? "Grabación en pausa" : "Capturando audio del micrófono...") : "Listo para grabar"}
                 </p>
 
+                {isRecording && (
+                  <div
+                    className={`flex items-end gap-1 h-6 mt-3 ${isPaused ? 'opacity-40' : ''}`}
+                    aria-hidden="true"
+                  >
+                    {[10, 18, 24, 16, 12].map((height, index) => (
+                      <span
+                        key={index}
+                        className="recording-wave-bar w-1.5 rounded-full bg-red-500"
+                        style={{
+                          height: `${height}px`,
+                          animationDelay: `${index * 90}ms`,
+                          animationPlayState: isPaused ? 'paused' : 'running',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {/* BOTONES DE CONTROL */}
                 <div className="flex items-center gap-4 mt-6">
                   {isRecording ? (
@@ -3151,7 +3328,7 @@ const App: React.FC = () => {
                           className="p-5 bg-indigo-600 text-white rounded-full active:scale-90 transition shadow-lg"
                           title="Reanudar"
                         >
-                          <Mic size={24} />
+                          <Play size={24} />
                         </button>
                       ) : (
                         <button 
@@ -3166,9 +3343,9 @@ const App: React.FC = () => {
                       <button 
                         onClick={() => stopRecording(false)}
                         className="p-4 bg-emerald-500 text-white rounded-full active:scale-90 transition shadow-lg"
-                        title="Guardar grabación"
+                        title="Detener y guardar"
                       >
-                        <Check size={20} />
+                        <Square size={20} />
                       </button>
                     </>
                   ) : (

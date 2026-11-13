@@ -6,7 +6,7 @@ authors:
   - family-names: "Montejo Dávila"
     given-names: "Carlos"
     orcid: "https://orcid.org/0000-0002-4607-8538"
-version: 3.1.1
+version: 3.1.2
 date-released: 2026-11-13
 license: GPL-3.0-only
 repository-code: "https://github.com/carlosmontejo99/profasist"

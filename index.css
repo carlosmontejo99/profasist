@@ -170,6 +170,21 @@ html.dark {
     text-rendering: optimizeLegibility;
   }
 
+  @keyframes profasist-wave {
+    0%, 100% { transform: scaleY(.35); }
+    50% { transform: scaleY(1); }
+  }
+  .recording-wave-bar {
+    transform-origin: bottom;
+    animation: profasist-wave 900ms ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .recording-wave-bar {
+      animation: none;
+      transform: scaleY(.75);
+    }
+  }
+
   /* Slate-400/500 on light backgrounds fall below WCAG AAA; raise them to
      slate-600 (7.5:1 on white) and slate-300 in dark mode (11:1). Theme
      overrides keep their own higher-specificity palettes. */

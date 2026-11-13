@@ -11,6 +11,7 @@ declare global {
       saveFile?: (base64Data: string, fileName: string, mimeType: string) => void;
       downloadFile?: (base64Data: string, fileName: string, mimeType: string) => void;
       exitApp?: () => void;
+      openAppSettings?: () => void;
       isBiometricAvailable?: () => boolean;
       authenticateBiometric?: () => void;
     };

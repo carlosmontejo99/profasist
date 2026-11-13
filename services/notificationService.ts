@@ -2,6 +2,8 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
+const CHANNEL_ID = 'profasist_reminders_v2';
+
 export interface NotificationStatus {
   supported: boolean;
   granted: boolean;
@@ -24,17 +26,56 @@ class NotificationService {
   private async initNativeChannels() {
     if (!this.isNative) return;
     try {
+      // Use a new channel id so Android does not inherit the invalid legacy
+      // sound from `profasist_reminders`. The old channel remains unused.
       await LocalNotifications.createChannel({
-        id: 'profasist_reminders',
+        id: CHANNEL_ID,
         name: 'Recordatorios de Clases',
         description: 'Alertas automáticas al inicio o previo a tus clases programadas',
         importance: 4, // High importance
         visibility: 1,  // Public on lockscreen
-        sound: 'res://raw/notification',
         vibration: true
       });
     } catch (e) {
       console.warn('Could not create notification channel:', e);
+    }
+  }
+
+  /**
+   * Whether the app is running inside a native Capacitor shell.
+   */
+  public isNativePlatform(): boolean {
+    return this.isNative;
+  }
+
+  /**
+   * Check the Android 12+ exact-alarm special permission.
+   */
+  public async getExactAlarmStatus(): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> {
+    if (!this.isNative) return 'granted';
+    try {
+      const status = await LocalNotifications.checkExactNotificationSetting();
+      if (status.exact_alarm === 'granted') return 'granted';
+      if (status.exact_alarm === 'denied') return 'denied';
+      return 'prompt';
+    } catch (error) {
+      console.warn('Could not check exact alarm setting:', error);
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Open the Android settings screen for exact alarms. Returns the resulting
+   * permission state; on Android < 12 it resolves as granted.
+   */
+  public async requestExactAlarmPermission(): Promise<boolean> {
+    if (!this.isNative) return true;
+    try {
+      const status = await LocalNotifications.changeExactNotificationSetting();
+      return status.exact_alarm === 'granted';
+    } catch (error) {
+      console.warn('Could not open exact alarm settings:', error);
+      return false;
     }
   }
 
@@ -103,10 +144,10 @@ class NotificationService {
           notifications: [
             {
               title: 'ProfAsist: Alerta de Prueba',
-              body: '¡Notificaciones nativas en Android funcionando correctamente! 🔔',
+              body: 'Notificaciones nativas de Android funcionando correctamente.',
               id: Math.floor(Math.random() * 10000) + 1,
               schedule: { at: new Date(Date.now() + 1000) }, // 1 second in future
-              channelId: 'profasist_reminders',
+              channelId: CHANNEL_ID,
               actionTypeId: '',
               extra: { test: true }
             }
@@ -120,7 +161,7 @@ class NotificationService {
     } else {
       try {
         const n = new Notification('ProfAsist: Alerta de Prueba', {
-          body: '¡Notificaciones locales en navegador listas! 🔔',
+          body: 'Notificaciones locales del navegador listas.',
           requireInteraction: true
         });
         n.onclick = () => window.focus();
@@ -195,7 +236,7 @@ class NotificationService {
                 repeats: true,
                 allowWhileIdle: true
               },
-              channelId: 'profasist_reminders',
+              channelId: CHANNEL_ID,
               extra: { groupId: group.id }
             });
           }

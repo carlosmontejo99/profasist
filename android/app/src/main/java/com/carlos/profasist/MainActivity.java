@@ -2,11 +2,13 @@ package com.carlos.profasist;
 
 import android.Manifest;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -107,6 +109,20 @@ public class MainActivity extends BridgeActivity {
                     @JavascriptInterface
                     public void exitApp() {
                         finish();
+                    }
+
+                    @JavascriptInterface
+                    public void openAppSettings() {
+                        try {
+                            Intent intent = new Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:" + getPackageName())
+                            );
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                        } catch (Exception exception) {
+                            exception.printStackTrace();
+                        }
                     }
 
                     @JavascriptInterface
