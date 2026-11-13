@@ -1,4 +1,4 @@
-# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.1.0
+# Limitaciones Conocidas y Comportamiento Documentado — ProfAsist v3.1.1
 
 ## Estado de distribución
 

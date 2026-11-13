@@ -1,5 +1,12 @@
 # Registro de Cambios (Changelog) — ProfAsist
 
+## [v3.1.1] - 2026-11-13
+
+- Splash visible **1.5 s** (3× la duración original) antes del fade-out de 450 ms.
+- `versionCode 311` / `versionName 3.1.1`.
+- Sin cambios en el modelo de datos, cálculo, actas, auditoría ni puente ADB.
+
+
 ## [v3.1.0] - 2026-11-13
 
 ### Motor académico
