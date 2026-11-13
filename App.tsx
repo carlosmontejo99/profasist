@@ -2745,8 +2745,11 @@ const App: React.FC = () => {
             
             <div className="space-y-6 mb-10">
               <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-3xl"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">NOMBRE DE MATERIA</label><input className="w-full bg-transparent border-none focus:ring-0 font-bold dark:text-white p-0 text-lg" defaultValue={editingGroup?.name} id="mname" placeholder="Ej: Bioquímica" /></div>
-              
-              <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-3xl"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">HORARIO (RESUMEN)</label><input className="w-full bg-transparent border-none focus:ring-0 font-bold dark:text-white p-0" defaultValue={editingGroup?.scheduleSummary || 'Lun, Mie 10:00'} id="msched" /></div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-3xl"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">SEMESTRE</label><input className="w-full bg-transparent border-none focus:ring-0 font-bold dark:text-white p-0" defaultValue={editingGroup?.semester || data.settings.currentSemester || '2026-A'} id="msemester" placeholder="2026-B" /></div>
+                <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-3xl"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">HORARIO (RESUMEN)</label><input className="w-full bg-transparent border-none focus:ring-0 font-bold dark:text-white p-0" defaultValue={editingGroup?.scheduleSummary || 'Lun, Mie 10:00'} id="msched" /></div>
+              </div>
               
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 block flex items-center gap-2"><Palette size={14} /> Paleta de Colores</label>
@@ -2763,22 +2766,35 @@ const App: React.FC = () => {
 
             <div className="flex flex-col gap-3">
               <button onClick={() => {
-                const name = (document.getElementById('mname') as HTMLInputElement).value;
+                const name = (document.getElementById('mname') as HTMLInputElement).value.trim();
                 const sched = (document.getElementById('msched') as HTMLInputElement).value;
-                if(name) { 
-                  Storage.saveGroup({
-                    id: editingGroup?.id || Utils.generateUUID(), 
-                    name, 
-                    semester: editingGroup?.semester || '2026-A', 
-                    color: customColor, 
-                    scheduleSummary: sched, 
-                    students: editingGroup?.students || [], 
-                    sessions: editingGroup?.sessions || [], 
-                    archived: editingGroup?.archived || false
-                  }); 
-                  refresh(); 
-                  setIsGroupModalOpen(false); 
-                }
+                const semester = (document.getElementById('msemester') as HTMLInputElement).value.trim();
+                if (!name) return;
+
+                // Re-read the latest persisted group so editing metadata never
+                // overwrites grades captured while the modal was open.
+                const currentData = Storage.loadData();
+                const latest = editingGroup
+                  ? currentData.groups.find(g => g.id === editingGroup.id)
+                  : undefined;
+                const base = latest || editingGroup;
+
+                Storage.saveGroup({
+                  ...(base || {}),
+                  id: base?.id || Utils.generateUUID(),
+                  name,
+                  semester: semester || base?.semester || currentData.settings.currentSemester || '2026-A',
+                  color: customColor,
+                  scheduleSummary: sched,
+                  students: base?.students || [],
+                  sessions: base?.sessions || [],
+                  archived: base?.archived || false,
+                  evaluations: base?.evaluations,
+                  closureConfig: base?.closureConfig,
+                  reporting: base?.reporting,
+                });
+                refresh();
+                setIsGroupModalOpen(false);
               }} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl active:scale-95 transition-all">GUARDAR CAMBIOS</button>
               
               {editingGroup && (

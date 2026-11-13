@@ -1,8 +1,9 @@
 
-import { AppData, Group, Student, Session, AttendanceRecord, AppSettings, BackupFile, ViewState, AudioRecording } from '../types';
+import { AppData, Group, Student, Session, AttendanceRecord, AppSettings, BackupFile, ViewState, AudioRecording, InstitutionProfile } from '../types';
 
 const STORAGE_KEY = 'profasist_v1_data';
 const UI_STATE_KEY = 'profasist_v1_ui_state';
+export const APP_DATA_VERSION = 2;
 
 // Calculate default semester dynamically based on today's date
 const now = new Date();
@@ -84,45 +85,113 @@ export const getDemoGroup = (): Group => {
   };
 };
 
+export const buildDefaultInstitution = (settings: AppSettings = {}): InstitutionProfile => ({
+  university: settings.institution?.university || '',
+  institute: settings.institution?.institute || '',
+  laboratoryPrefix: settings.institution?.laboratoryPrefix || 'Laboratorio de',
+  professor: settings.institution?.professor || settings.teacherName || '',
+  semesterDefault:
+    settings.institution?.semesterDefault ||
+    settings.currentSemester ||
+    defaultSemester,
+  email: settings.institution?.email,
+  logoDataUrl: settings.institution?.logoDataUrl,
+});
+
 const initialData: AppData = {
-  version: 1,
+  version: APP_DATA_VERSION,
   settings: {
-    currentSemester: defaultSemester, 
-    teacherName: ''
+    currentSemester: defaultSemester,
+    teacherName: '',
+    institution: buildDefaultInstitution({
+      currentSemester: defaultSemester,
+      teacherName: '',
+    }),
   },
-  groups: []
+  groups: [],
+};
+
+const migrateGroup = (raw: any): Group => {
+  const group = (raw || {}) as Group;
+  if (!Array.isArray(group.students)) group.students = [];
+  if (!Array.isArray(group.sessions)) group.sessions = [];
+  if (typeof group.archived === 'undefined') group.archived = false;
+  if (!group.color) group.color = '#4f46e5';
+  if (!group.scheduleSummary) group.scheduleSummary = '';
+  if (typeof group.name !== 'string') group.name = '';
+  if (typeof group.semester !== 'string' || !group.semester) {
+    group.semester = defaultSemester;
+  }
+  return group;
+};
+
+/**
+ * Pure, idempotent migration from the v1 payload to AppData v2.
+ * It never deletes groups, students, sessions, evaluations or closure config.
+ */
+export const migrateData = (input: unknown): { data: AppData; changed: boolean } => {
+  let changed = false;
+
+  if (!input || typeof input !== 'object') {
+    return { data: { ...initialData, groups: [] }, changed: true };
+  }
+
+  const parsed = input as AppData;
+
+  if (!Array.isArray(parsed.groups)) {
+    parsed.groups = [];
+    changed = true;
+  }
+
+  if (!parsed.settings || typeof parsed.settings !== 'object') {
+    parsed.settings = {};
+    changed = true;
+  }
+
+  if (typeof parsed.version !== 'number') {
+    parsed.version = 1;
+    changed = true;
+  }
+
+  const normalizedInstitution = buildDefaultInstitution(parsed.settings);
+  if (
+    !parsed.settings.institution ||
+    JSON.stringify(normalizedInstitution) !== JSON.stringify(parsed.settings.institution)
+  ) {
+    parsed.settings.institution = normalizedInstitution;
+    changed = true;
+  }
+
+  if (!parsed.settings.currentSemester) {
+    parsed.settings.currentSemester = parsed.settings.institution.semesterDefault || defaultSemester;
+    changed = true;
+  }
+
+  parsed.groups = parsed.groups.map(migrateGroup);
+
+  if (parsed.version !== APP_DATA_VERSION) {
+    parsed.version = APP_DATA_VERSION;
+    changed = true;
+  }
+
+  return { data: parsed, changed };
 };
 
 export const loadData = (): AppData => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      saveData(initialData);
-      return initialData;
-    }
-    
-    const parsed = JSON.parse(raw);
-    
-    // Migration/Validation check
-    if (!parsed.groups || !Array.isArray(parsed.groups)) {
-      parsed.groups = [];
-      saveData(parsed);
-      return parsed as AppData;
-    }
-    
-    // Backfill defaults if migrating from older version
-    if (typeof parsed.version === 'undefined') {
-        parsed.version = 1;
-        parsed.settings = parsed.settings || {};
-        if (!parsed.settings.currentSemester) {
-            parsed.settings.currentSemester = defaultSemester;
-        }
-        parsed.groups.forEach((g: any) => {
-            if (typeof g.archived === 'undefined') g.archived = false;
-        });
+      const fresh: AppData = JSON.parse(JSON.stringify(initialData));
+      saveData(fresh);
+      return fresh;
     }
 
-    return parsed as AppData;
+    const parsed = JSON.parse(raw);
+    const { data, changed } = migrateData(parsed);
+
+    if (changed) saveData(data);
+
+    return data;
   } catch (e) {
     console.error("Failed to load data", e);
     return initialData;

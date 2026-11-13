@@ -11,6 +11,17 @@ node_modules
 dist
 *.local
 
+# Local server runtime state
+vapid_keys.json
+subscriptions.json
+schedules.json
+
+# Agent bridge local artifacts
+backups/
+*.snapshot.json
+tools/adb_bridge/.venv/
+__pycache__/
+
 # Android signing material must never be committed
 *.jks
 *.keystore

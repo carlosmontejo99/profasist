@@ -7,6 +7,12 @@ import {
 } from 'lucide-react';
 import { Group, Student, GroupEvaluations, ParcialEvaluation, EvaluationCategory, Activity } from '../../types';
 import * as Utils from '../../services/utils';
+import {
+  calculateCategoryScore,
+  calculateParcialScore,
+  calculateFinalScore,
+  resolveGradingPolicy,
+} from '../../services/grading';
 import * as XLSX from 'xlsx';
 
 interface EvaluationSectionProps {
@@ -267,7 +273,22 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
     });
   };
 
-  // Grade calculation logic
+  // Grade calculation logic — delegated to the single engine in services/grading.ts
+  const gradingPolicy = resolveGradingPolicy(group);
+  const calcGroup = { ...group, evaluations };
+  const getStudentFinalScore = (studentId: string) =>
+    calculateFinalScore(calcGroup, studentId, gradingPolicy);
+  const getParcialScore = (studentId: string, parcial: ParcialEvaluation) =>
+    calculateParcialScore(studentId, parcial, gradingPolicy);
+
+  const getParcialClassAverage = (parcial: ParcialEvaluation): number | null => {
+    const values = group.students
+      .map(student => getParcialScore(student.id, parcial).value)
+      .filter((value): value is number => value !== null);
+    if (values.length === 0) return null;
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  };
+
   const hasStudentGrades = (studentId: string, parcial: ParcialEvaluation): boolean => {
     const studentGrades = parcial.grades[studentId];
     if (!studentGrades) return false;
@@ -277,26 +298,11 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
   };
 
   const calculateStudentCategoryAverage = (
-    studentId: string, 
-    category: EvaluationCategory, 
+    studentId: string,
+    category: EvaluationCategory,
     grades: Record<string, Record<string, number>>
   ): number => {
-    const studentGrades = grades[studentId] || {};
-    const activities = category.activities;
-    
-    if (activities.length === 0) return 0;
-
-    let sum = 0;
-    let counted = 0;
-    activities.forEach(act => {
-      const val = studentGrades[act.id];
-      if (val !== undefined && !isNaN(val)) {
-        sum += val;
-        counted++;
-      }
-    });
-
-    return counted > 0 ? sum / counted : 0;
+    return calculateCategoryScore(studentId, category, grades).value ?? 0;
   };
 
   const hasCategoryGrades = (studentId: string, category: EvaluationCategory, grades: Record<string, Record<string, number>>): boolean => {
@@ -306,43 +312,10 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
   };
 
   const calculateStudentParcialGrade = (
-    studentId: string, 
+    studentId: string,
     parcial: ParcialEvaluation
   ): number => {
-    const grades = parcial.grades;
-    let weightedSum = 0;
-    let sumWeights = 0;
-
-    parcial.categories.forEach(cat => {
-      const catAvg = calculateStudentCategoryAverage(studentId, cat, grades);
-      weightedSum += catAvg * (cat.weight / 100);
-      sumWeights += cat.weight;
-    });
-
-    if (sumWeights > 0 && Math.abs(sumWeights - 100) > 0.01) {
-      let rawWeightedSum = 0;
-      parcial.categories.forEach(cat => {
-        const catAvg = calculateStudentCategoryAverage(studentId, cat, grades);
-        rawWeightedSum += catAvg * cat.weight;
-      });
-      return rawWeightedSum / sumWeights;
-    }
-
-    return weightedSum;
-  };
-
-  const calculateStudentFinalAverage = (studentId: string): number => {
-    const p1 = calculateStudentParcialGrade(studentId, evaluations.parcial1);
-    const p2 = calculateStudentParcialGrade(studentId, evaluations.parcial2);
-    const p3 = calculateStudentParcialGrade(studentId, evaluations.parcial3);
-    
-    return (p1 + p2 + p3) / 3;
-  };
-
-  const hasAnyParcialGrade = (studentId: string): boolean => {
-    return hasStudentGrades(studentId, evaluations.parcial1) ||
-           hasStudentGrades(studentId, evaluations.parcial2) ||
-           hasStudentGrades(studentId, evaluations.parcial3);
+    return getParcialScore(studentId, parcial).value ?? 0;
   };
 
   // Handlers for Grades
@@ -642,15 +615,12 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
       ];
       const headers = ["Matrícula", "Alumno", "Parcial 1", "Parcial 2", "Parcial 3", "Promedio Final"];
       const dataRows = (group.students || []).map(student => {
-        const hasP1 = hasStudentGrades(student.id, evaluations.parcial1);
-        const hasP2 = hasStudentGrades(student.id, evaluations.parcial2);
-        const hasP3 = hasStudentGrades(student.id, evaluations.parcial3);
-        const p1 = hasP1 ? Number(calculateStudentParcialGrade(student.id, evaluations.parcial1).toFixed(1)) : '—';
-        const p2 = hasP2 ? Number(calculateStudentParcialGrade(student.id, evaluations.parcial2).toFixed(1)) : '—';
-        const p3 = hasP3 ? Number(calculateStudentParcialGrade(student.id, evaluations.parcial3).toFixed(1)) : '—';
-        const hasAny = hasP1 || hasP2 || hasP3;
-        const finalAvg = hasAny ? Number(calculateStudentFinalAverage(student.id).toFixed(1)) : '—';
-        
+        const score = getStudentFinalScore(student.id);
+        const p1 = score.p1 === null ? '—' : Number(score.p1.toFixed(1));
+        const p2 = score.p2 === null ? '—' : Number(score.p2.toFixed(1));
+        const p3 = score.p3 === null ? '—' : Number(score.p3.toFixed(1));
+        const finalAvg = score.final === null ? 'Pendiente' : Number(score.final.toFixed(1));
+
         return [
           student.rollNumber || 'S/M',
           student.name,
@@ -866,30 +836,27 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
                 {group.students.map(student => {
-                  const hasP1 = hasStudentGrades(student.id, evaluations.parcial1);
-                  const hasP2 = hasStudentGrades(student.id, evaluations.parcial2);
-                  const hasP3 = hasStudentGrades(student.id, evaluations.parcial3);
-                  const p1 = hasP1 ? calculateStudentParcialGrade(student.id, evaluations.parcial1) : 0;
-                  const p2 = hasP2 ? calculateStudentParcialGrade(student.id, evaluations.parcial2) : 0;
-                  const p3 = hasP3 ? calculateStudentParcialGrade(student.id, evaluations.parcial3) : 0;
-                  const hasAny = hasP1 || hasP2 || hasP3;
-                  const finalAvg = hasAny ? calculateStudentFinalAverage(student.id) : 0;
-                  
+                  const score = getStudentFinalScore(student.id);
+                  const p1 = score.p1;
+                  const p2 = score.p2;
+                  const p3 = score.p3;
+                  const finalAvg = score.final;
+
                   return (
                     <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{student.name}</td>
-                      <td className="py-4 px-4 text-center">{hasP1 ? p1.toFixed(1) : '—'}</td>
-                      <td className="py-4 px-4 text-center">{hasP2 ? p2.toFixed(1) : '—'}</td>
-                      <td className="py-4 px-4 text-center">{hasP3 ? p3.toFixed(1) : '—'}</td>
+                      <td className="py-4 px-4 text-center">{p1 === null ? '—' : p1.toFixed(1)}</td>
+                      <td className="py-4 px-4 text-center">{p2 === null ? '—' : p2.toFixed(1)}</td>
+                      <td className="py-4 px-4 text-center">{p3 === null ? '—' : p3.toFixed(1)}</td>
                       <td className={`py-4 px-6 text-right font-black text-sm bg-indigo-50/10 dark:bg-indigo-950/5 ${
-                        !hasAny ? 'text-slate-400 dark:text-slate-500' :
-                        finalAvg >= 8.0 
-                          ? 'text-emerald-600 dark:text-emerald-400' 
-                          : finalAvg >= 6.0 
-                            ? 'text-amber-600 dark:text-amber-400' 
+                        finalAvg === null ? 'text-slate-400 dark:text-slate-500' :
+                        finalAvg >= 8.0
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : finalAvg >= 7.0
+                            ? 'text-amber-600 dark:text-amber-400'
                             : 'text-rose-600 dark:text-rose-400'
                       }`}>
-                        {hasAny ? finalAvg.toFixed(1) : '—'}
+                        {finalAvg === null ? 'Pendiente' : finalAvg.toFixed(1)}
                       </td>
                     </tr>
                   );
@@ -1110,14 +1077,15 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
               <div>
                 <h4 className="font-black text-sm text-slate-950 dark:text-white uppercase tracking-wider flex items-center gap-2">
                   Matriz Interactiva de Notas
-                  {group.students.filter(s => hasStudentGrades(s.id, currentParcial)).length > 0 && (
-                    <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 rounded-full text-[10px] font-black uppercase">
-                      Promedio Grupal: {(
-                        group.students.reduce((sum, s) => sum + (hasStudentGrades(s.id, currentParcial) ? calculateStudentParcialGrade(s.id, currentParcial) : 0), 0) /
-                        (group.students.filter(s => hasStudentGrades(s.id, currentParcial)).length || 1)
-                      ).toFixed(1)}
-                    </span>
-                  )}
+                  {(() => {
+                    const classAverage = getParcialClassAverage(currentParcial);
+                    if (classAverage === null) return null;
+                    return (
+                      <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 rounded-full text-[10px] font-black uppercase">
+                        Promedio Grupal: {classAverage.toFixed(1)}
+                      </span>
+                    );
+                  })()}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Escribe las notas directamente en cada casilla (0 al 10). Se promediará en tiempo real.</p>
               </div>
@@ -1206,8 +1174,8 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
                   ) : (
                     filteredStudents.map((student, studentIdx) => {
                       const studentGrades = currentParcial.grades[student.id] || {};
-                      const hasParcialGrades = hasStudentGrades(student.id, currentParcial);
-                      const finalParcial = hasParcialGrades ? calculateStudentParcialGrade(student.id, currentParcial) : 0;
+                      const parcialScore = getParcialScore(student.id, currentParcial);
+                      const finalParcial = parcialScore.value;
 
                       return (
                         <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-850/30 transition-colors">
@@ -1254,14 +1222,14 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ group, onS
                         })}
 
                         <td className={`py-3.5 px-3 text-center font-black border-l border-slate-200 dark:border-slate-750 min-w-[110px] ${
-                          !hasParcialGrades ? 'text-slate-400 dark:text-slate-500 bg-slate-50/30 dark:bg-slate-850/30' :
-                          finalParcial >= 8.0 
-                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400' 
-                            : finalParcial >= 6.0 
-                              ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400' 
+                          finalParcial === null ? 'text-slate-400 dark:text-slate-500 bg-slate-50/30 dark:bg-slate-850/30' :
+                          finalParcial >= 8.0
+                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                            : finalParcial >= 7.0
+                              ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
                               : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400'
                         }`}>
-                          {hasParcialGrades ? finalParcial.toFixed(1) : '—'}
+                          {finalParcial === null ? 'Pendiente' : finalParcial.toFixed(1)}
                         </td>
                       </tr>
                     );

@@ -5,23 +5,13 @@ import {
   Percent, AlertCircle, RefreshCw, Calculator, HelpCircle,
   Download, Calendar, ChevronRight, CheckCircle2, ChevronDown, Sliders
 } from 'lucide-react';
-import { Group, Student, GroupEvaluations } from '../../types';
+import { Group, ClosureConfig, GradingPolicy } from '../../types';
 import * as Utils from '../../services/utils';
 import { AudioHaptics } from '../../services/audioHaptics';
+import { calculateParcialScore, calculateFinalScore, formatGrade } from '../../services/grading';
 import * as XLSX from 'xlsx';
 
-// Closure configurations interface
-export interface ClosureConfig {
-  universityName: string;
-  formulaType: 'simple' | 'weighted' | 'custom';
-  weights: { p1: number; p2: number; p3: number };
-  minAttendancePass: boolean;
-  attendanceMinRate: number;
-  roundingRule: 'none' | 'round' | 'floor' | 'ceil' | 'mexican';
-  failIfAnyParcialFailed: boolean;
-  customFormulaDesc?: string;
-  teacherName?: string;
-}
+export type { ClosureConfig } from '../../types';
 
 interface AcademicClosureProps {
   group: Group;
@@ -31,8 +21,9 @@ interface AcademicClosureProps {
 }
 
 // Convert numbers to Spanish text helper
-const numberToSpanishWords = (num: number, status?: string): string => {
-  if (status === 'S/D') return 'SIN DERECHO';
+const numberToSpanishWords = (num: number | null, status?: string): string => {
+  if (status === 'S/D' || status === 'Sin derecho') return 'SIN DERECHO';
+  if (num === null || status === 'Pendiente') return 'PENDIENTE';
   
   const rounded = Math.round(num * 10) / 10;
   const integerPart = Math.floor(rounded);
@@ -64,20 +55,21 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
   
   // Load configuration or set defaults
   const [config, setConfig] = useState<ClosureConfig>({
-    universityName: 'UNIVERSIDAD TECNOLÓGICA NACIONAL',
+    universityName: 'UNIVERSIDAD AUTÓNOMA DE CIUDAD JUÁREZ · DCQB',
     formulaType: 'simple',
     weights: { p1: 30, p2: 30, p3: 40 },
-    minAttendancePass: true,
+    minAttendancePass: false,
     attendanceMinRate: attendanceThreshold,
     roundingRule: 'round',
     failIfAnyParcialFailed: false,
-    teacherName: ''
+    teacherName: '',
+    minPass: 7.0,
   });
 
   // Extract settings on group load
   useEffect(() => {
     // Check if group has a saved closure config
-    const savedConfig = (group as any).closureConfig;
+    const savedConfig = group.closureConfig;
     if (savedConfig) {
       setConfig(savedConfig);
     } else {
@@ -105,127 +97,40 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
     onNotification('Configuración de cierre académico guardada.');
   };
 
-  // Safe helper to evaluate student averages for a single parcial
-  const getParcialGrade = (studentId: string, parcialKey: 'parcial1' | 'parcial2' | 'parcial3'): number => {
-    if (!group.evaluations || !group.evaluations[parcialKey]) return 0;
-    const parcial = group.evaluations[parcialKey];
-    
-    // Exact same calculation logic as in EvaluationSection
-    let weightedSum = 0;
-    let sumWeights = 0;
-
-    parcial.categories.forEach(cat => {
-      const studentGrades = parcial.grades[studentId] || {};
-      const activities = cat.activities;
-      
-      let catAvg = 0;
-      if (activities.length > 0) {
-        let sum = 0;
-        let counted = 0;
-        activities.forEach(act => {
-          const val = studentGrades[act.id];
-          if (val !== undefined && !isNaN(val)) {
-            sum += val;
-            counted++;
-          }
-        });
-        catAvg = counted > 0 ? sum / counted : 0;
-      }
-
-      weightedSum += catAvg * (cat.weight / 100);
-      sumWeights += cat.weight;
-    });
-
-    if (sumWeights > 0 && Math.abs(sumWeights - 100) > 0.01) {
-      let rawWeightedSum = 0;
-      parcial.categories.forEach(cat => {
-        const studentGrades = parcial.grades[studentId] || {};
-        const activities = cat.activities;
-        
-        let catAvg = 0;
-        if (activities.length > 0) {
-          let sum = 0;
-          let counted = 0;
-          activities.forEach(act => {
-            const val = studentGrades[act.id];
-            if (val !== undefined && !isNaN(val)) {
-              sum += val;
-              counted++;
-            }
-          });
-          catAvg = counted > 0 ? sum / counted : 0;
-        }
-        rawWeightedSum += catAvg * cat.weight;
-      });
-      return rawWeightedSum / sumWeights;
-    }
-
-    return weightedSum;
+  // Effective policy for this screen. The engine is shared with the
+  // evaluation grid and the institutional export.
+  const gradingPolicy: GradingPolicy = {
+    formula: config.formulaType === 'weighted' ? 'weighted' : 'simple',
+    weights: config.weights,
+    rounding: config.roundingRule,
+    minPass: config.minPass ?? 7.0,
+    attendanceGate: {
+      enabled: config.minAttendancePass,
+      minRate: config.attendanceMinRate,
+    },
+    missingPolicy: 'renormalize',
   };
 
-  // Compile final average for a student based on current configuration rules
+  // Safe helper to evaluate student averages for a single parcial.
+  const getParcialGrade = (
+    studentId: string,
+    parcialKey: 'parcial1' | 'parcial2' | 'parcial3',
+  ): number | null =>
+    calculateParcialScore(studentId, group.evaluations?.[parcialKey], gradingPolicy).value;
+
+  // Compile the final score with the same engine used by the rest of the app.
   const getStudentFinalScore = (studentId: string) => {
-    const p1 = getParcialGrade(studentId, 'parcial1');
-    const p2 = getParcialGrade(studentId, 'parcial2');
-    const p3 = getParcialGrade(studentId, 'parcial3');
-    
-    const stats = Utils.calculateStudentStats(group, studentId);
-    const attendancePercentage = stats.percentage;
-
-    let rawGrade = 0;
-    if (config.formulaType === 'weighted') {
-      const w1 = config.weights.p1 / 100;
-      const w2 = config.weights.p2 / 100;
-      const w3 = config.weights.p3 / 100;
-      rawGrade = p1 * w1 + p2 * w2 + p3 * w3;
-    } else {
-      rawGrade = (p1 + p2 + p3) / 3;
-    }
-
-    // Rounding rules
-    let finalGrade = rawGrade;
-    if (config.roundingRule === 'round') {
-      finalGrade = Math.round(rawGrade * 10) / 10;
-    } else if (config.roundingRule === 'floor') {
-      finalGrade = Math.floor(rawGrade * 10) / 10;
-    } else if (config.roundingRule === 'ceil') {
-      finalGrade = Math.ceil(rawGrade * 10) / 10;
-    } else if (config.roundingRule === 'mexican') {
-      if (rawGrade < 6.0) {
-        finalGrade = Math.floor(rawGrade); // e.g. 5.9 -> 5.0
-      } else {
-        const dec = rawGrade - Math.floor(rawGrade);
-        if (dec >= 0.5) {
-          finalGrade = Math.ceil(rawGrade);
-        } else {
-          finalGrade = Math.floor(rawGrade);
-        }
-      }
-    } else {
-      finalGrade = Math.round(rawGrade * 10) / 10;
-    }
-
-    // Determine Estatus
-    let status: 'Aprobado' | 'Reprobado' | 'S/D' = finalGrade >= 6.0 ? 'Aprobado' : 'Reprobado';
-
-    // Min attendance check (Sin Derecho)
-    if (config.minAttendancePass && attendancePercentage < config.attendanceMinRate) {
-      status = 'S/D';
-      finalGrade = 5.0; // Institutional failure grade
-    }
-
-    // Force failure if any individual parcial is failed
-    if (config.failIfAnyParcialFailed && (p1 < 6.0 || p2 < 6.0 || p3 < 6.0)) {
-      status = 'Reprobado';
-      if (finalGrade >= 6.0) finalGrade = 5.0;
-    }
-
+    const result = calculateFinalScore(group, studentId, gradingPolicy);
     return {
-      p1, p2, p3,
-      rawGrade,
-      finalGrade,
-      status,
-      attendancePercentage
+      p1: result.p1,
+      p2: result.p2,
+      p3: result.p3,
+      rawGrade: result.rawFinal ?? 0,
+      finalGrade: result.final,
+      status: result.status,
+      attendancePercentage: result.attendancePercentage,
+      reason: result.reason,
+      warnings: result.warnings,
     };
   };
 
@@ -263,10 +168,10 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
       return [
         student.rollNumber || 'S/M',
         student.name,
-        parseFloat(summary.p1.toFixed(1)),
-        parseFloat(summary.p2.toFixed(1)),
-        parseFloat(summary.p3.toFixed(1)),
-        parseFloat(summary.finalGrade.toFixed(1)),
+        summary.p1 === null ? '' : Number(summary.p1.toFixed(1)),
+        summary.p2 === null ? '' : Number(summary.p2.toFixed(1)),
+        summary.p3 === null ? '' : Number(summary.p3.toFixed(1)),
+        summary.finalGrade === null ? '' : Number(summary.finalGrade.toFixed(1)),
         numberToSpanishWords(summary.finalGrade, summary.status),
         `${summary.attendancePercentage}%`,
         summary.status
@@ -274,18 +179,19 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
     });
 
     // Summary Statistics
-    const approvedCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Aprobado').length;
-    const reprobadosCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Reprobado').length;
-    const sdCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'S/D').length;
+    const approvedCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Acreditado').length;
+    const reprobadosCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'No Acreditado').length;
+    const sdCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Sin derecho').length;
+    const pendienteCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Pendiente').length;
     const totalStudents = group.students.length;
     const approvedRate = totalStudents > 0 ? ((approvedCount / totalStudents) * 100).toFixed(1) : '0';
 
     const footerRows = [
       [],
       ["ESTADÍSTICAS DEL GRUPO"],
-      ["Alumnos Registrados:", totalStudents, "Aprobados:", approvedCount],
-      ["Reprobados:", reprobadosCount, "Sin Derecho (S/D):", sdCount],
-      ["Porcentaje de Aprobación:", `${approvedRate}%`]
+      ["Alumnos Registrados:", totalStudents, "Acreditados:", approvedCount],
+      ["No Acreditados:", reprobadosCount, "Sin Derecho (S/D):", sdCount],
+      ["Pendientes:", pendienteCount, "Porcentaje de Acreditación:", `${approvedRate}%`]
     ];
 
     // Build worksheet with All Data
@@ -329,14 +235,19 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
 
   // Statistics calculation for overview
   const totalStudents = group.students.length;
-  const approvedCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Aprobado').length;
-  const reprobadosCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Reprobado').length;
-  const sdCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'S/D').length;
+  const approvedCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Acreditado').length;
+  const reprobadosCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'No Acreditado').length;
+  const sdCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Sin derecho').length;
+  const pendienteCount = group.students.filter(s => getStudentFinalScore(s.id).status === 'Pendiente').length;
   const passRate = totalStudents > 0 ? Math.round((approvedCount / totalStudents) * 100) : 0;
-  
-  // Calculate average final grade of entire class
-  const classFinalSum = group.students.reduce((acc, s) => acc + getStudentFinalScore(s.id).finalGrade, 0);
-  const classAverage = totalStudents > 0 ? (classFinalSum / totalStudents).toFixed(1) : '0.0';
+
+  // Calculate average final grade of entire class, ignoring pending students.
+  const gradedFinals = group.students
+    .map(s => getStudentFinalScore(s.id).finalGrade)
+    .filter((value): value is number => value !== null);
+  const classAverage = gradedFinals.length > 0
+    ? (gradedFinals.reduce((acc, value) => acc + value, 0) / gradedFinals.length).toFixed(1)
+    : '—';
 
   return (
     <div className="space-y-6">
@@ -373,16 +284,16 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
               <p className="text-xl font-black mt-1 text-white">{classAverage}</p>
             </div>
             <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl">
-              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Aprobados</p>
+              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Acreditados</p>
               <p className="text-xl font-black mt-1 text-emerald-400">{approvedCount} <span className="text-xs text-white/50 font-medium">({passRate}%)</span></p>
             </div>
             <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl">
-              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Reprobados</p>
+              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">No Acreditados</p>
               <p className="text-xl font-black mt-1 text-rose-400">{reprobadosCount}</p>
             </div>
             <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl">
               <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Sin Derecho (S/D)</p>
-              <p className="text-xl font-black mt-1 text-amber-400">{sdCount}</p>
+              <p className="text-xl font-black mt-1 text-amber-400">{sdCount} <span className="text-xs text-white/50 font-medium">· {pendienteCount} pend.</span></p>
             </div>
           </div>
         </div>
@@ -576,15 +487,16 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
                       <td className="py-2.5 px-2 text-slate-400 font-mono">{idx + 1}</td>
                       <td className="py-2.5 px-2 font-mono font-bold text-slate-700">{student.rollNumber || 'S/M'}</td>
                       <td className="py-2.5 px-2 font-bold text-slate-850 uppercase">{student.name}</td>
-                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{summary.p1.toFixed(1)}</td>
-                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{summary.p2.toFixed(1)}</td>
-                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{summary.p3.toFixed(1)}</td>
-                      <td className="py-2.5 px-2 text-center font-black text-slate-900">{summary.finalGrade.toFixed(1)}</td>
+                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{formatGrade(summary.p1)}</td>
+                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{formatGrade(summary.p2)}</td>
+                      <td className="py-2.5 px-2 text-center font-bold text-slate-600">{formatGrade(summary.p3)}</td>
+                      <td className="py-2.5 px-2 text-center font-black text-slate-900">{formatGrade(summary.finalGrade)}</td>
                       <td className="py-2.5 px-2 text-center font-bold text-slate-600">{summary.attendancePercentage}%</td>
                       <td className="py-2.5 px-2 text-right">
                         <span className={`font-black text-[10px] uppercase px-2 py-0.5 rounded ${
-                          summary.status === 'Aprobado' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          summary.status === 'S/D' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          summary.status === 'Acreditado' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          summary.status === 'Pendiente' ? 'bg-slate-50 text-slate-600 border border-slate-200' :
+                          summary.status === 'Sin derecho' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                           'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
                           {summary.status}
@@ -658,20 +570,22 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
                           <td className="py-3 px-4 text-slate-400 dark:text-slate-500 font-mono text-center">{idx + 1}</td>
                           <td className="py-3 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{student.rollNumber || 'S/M'}</td>
                           <td className="py-3 px-4 font-black text-slate-850 dark:text-white uppercase">{student.name}</td>
-                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{score.p1.toFixed(1)}</td>
-                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{score.p2.toFixed(1)}</td>
-                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{score.p3.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{formatGrade(score.p1)}</td>
+                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{formatGrade(score.p2)}</td>
+                          <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{formatGrade(score.p3)}</td>
                           <td className="py-3 px-4 text-center font-black bg-indigo-50/30 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-sm">
-                            {score.finalGrade.toFixed(1)}
+                            {formatGrade(score.finalGrade)}
                           </td>
                           <td className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-400">{score.attendancePercentage}%</td>
                           <td className="py-3 px-4 text-right">
                             <span className={`inline-block text-[9px] font-black uppercase px-2.5 py-1 rounded-md ${
-                              score.status === 'Aprobado' 
-                                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950' 
-                                : score.status === 'S/D' 
-                                  ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-950'
-                                  : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950'
+                              score.status === 'Acreditado'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950'
+                                : score.status === 'Pendiente'
+                                  ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                  : score.status === 'Sin derecho'
+                                    ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-950'
+                                    : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950'
                             }`}>
                               {score.status}
                             </span>
@@ -737,22 +651,25 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-850">
                       {group.students.map((student, idx) => {
                         const grade = getParcialGrade(student.id, selectedParcial === 'p1' ? 'parcial1' : selectedParcial === 'p2' ? 'parcial2' : 'parcial3');
-                        const isApproved = grade >= 6.0;
+                        const isPending = grade === null;
+                        const isApproved = grade !== null && grade >= (config.minPass ?? 7.0);
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/25 transition-all">
                             <td className="py-3 px-4 text-slate-400 dark:text-slate-500 font-mono text-center">{idx + 1}</td>
                             <td className="py-3 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{student.rollNumber || 'S/M'}</td>
                             <td className="py-3 px-4 font-black text-slate-850 dark:text-white uppercase">{student.name}</td>
                             <td className="py-3 px-4 text-center font-black text-slate-800 dark:text-white text-sm">
-                              {grade.toFixed(1)}
+                              {formatGrade(grade)}
                             </td>
                             <td className="py-3 px-4 text-right">
                               <span className={`inline-block text-[9px] font-black uppercase px-2.5 py-1 rounded-md ${
-                                isApproved 
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950' 
-                                  : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950'
+                                isPending
+                                  ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                  : isApproved
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950'
+                                    : 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950'
                               }`}>
-                                {isApproved ? 'Aprobado' : 'Reprobado'}
+                                {isPending ? 'Pendiente' : isApproved ? 'Acreditado' : 'No Acreditado'}
                               </span>
                             </td>
                           </tr>
@@ -798,15 +715,16 @@ export const AcademicClosure: React.FC<AcademicClosureProps> = ({
                           <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{student.rollNumber || 'S/M'}</td>
                           <td className="py-3.5 px-4 font-black text-slate-850 dark:text-white uppercase">{student.name}</td>
                           <td className="py-3.5 px-4 text-center font-black bg-indigo-50/10 dark:bg-slate-850 text-indigo-600 dark:text-indigo-400 text-sm">
-                            {score.finalGrade.toFixed(1)}
+                            {formatGrade(score.finalGrade)}
                           </td>
                           <td className="py-3.5 px-4 font-black text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide bg-indigo-50/5 dark:bg-slate-850/30">
                             {numberToSpanishWords(score.finalGrade, score.status)}
                           </td>
                           <td className="py-3.5 px-4 text-right font-black uppercase text-[10px]">
                             <span className={
-                              score.status === 'Aprobado' ? 'text-emerald-500' :
-                              score.status === 'S/D' ? 'text-amber-500' :
+                              score.status === 'Acreditado' ? 'text-emerald-500' :
+                              score.status === 'Pendiente' ? 'text-slate-500' :
+                              score.status === 'Sin derecho' ? 'text-amber-500' :
                               'text-rose-500'
                             }>
                               {score.status}
